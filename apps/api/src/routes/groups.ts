@@ -7,6 +7,7 @@ import { assertGroupMember, findGroupOr404, type GroupRow } from "../services/gr
 
 interface GroupSummaryRow extends GroupRow {
   member_count: number;
+  your_net: number;
 }
 
 interface MemberRow {
@@ -96,11 +97,15 @@ export function registerGroupRoutes(app: FastifyInstance, pool: Pool): void {
 
     const { rows } = await pool.query<GroupSummaryRow>(
       `SELECT g.id, g.name, g.currency, g.created_at,
-              COUNT(all_members.user_id)::int AS member_count
+              COUNT(all_members.user_id)::int AS member_count,
+              (COALESCE(gb.paid, 0) - COALESCE(gb.owed, 0)
+                 + COALESCE(gb.settled, 0))::bigint AS your_net
        FROM groups g
        JOIN group_members mine ON mine.group_id = g.id AND mine.user_id = $1
        LEFT JOIN group_members all_members ON all_members.group_id = g.id
-       GROUP BY g.id
+       LEFT JOIN group_balances gb
+         ON gb.group_id = g.id AND gb.user_id = $1
+       GROUP BY g.id, gb.paid, gb.owed, gb.settled
        ORDER BY g.created_at DESC, g.id`,
       [actor.id]
     );

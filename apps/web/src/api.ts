@@ -11,6 +11,7 @@ export interface Group {
   currency: string;
   created_at: string;
   member_count?: number;
+  your_net?: number;
 }
 
 export interface Member {

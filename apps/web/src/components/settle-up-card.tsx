@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { ArrowRight, CheckCircle2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   api,
+  type Member,
   type SettlementRecord,
   type SettlementTransaction
 } from "@/api";
@@ -15,18 +16,29 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { formatMoney } from "@/money";
+
+const MoneyFlowSankey = lazy(() =>
+  import("@/components/money-flow-sankey").then((module) => ({
+    default: module.MoneyFlowSankey
+  }))
+);
 
 export function SettleUpCard({
   groupId,
   currency,
+  members,
+  highlightUserId,
   transactions,
   history,
   onChanged
 }: {
   groupId: string;
   currency: string;
+  members: Member[];
+  highlightUserId?: string | undefined;
   transactions: SettlementTransaction[];
   history: SettlementRecord[];
   onChanged: () => void;
@@ -67,7 +79,7 @@ export function SettleUpCard({
   };
 
   return (
-    <Card>
+    <Card className="animate-rise border-border/70">
       <CardHeader>
         <CardTitle>{t("settle.title")}</CardTitle>
         <CardDescription>{t("settle.description")}</CardDescription>
@@ -79,7 +91,22 @@ export function SettleUpCard({
             {t("settle.done")}
           </div>
         ) : (
-          <ul className="space-y-2">
+          <>
+            {members.length <= 12 && (
+              <div className="space-y-2">
+                <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                  <MoneyFlowSankey
+                    transactions={transactions}
+                    currency={currency}
+                    highlightUserId={highlightUserId}
+                  />
+                </Suspense>
+                <p className="text-center text-xs text-muted-foreground">
+                  {t("flow.hint")}
+                </p>
+              </div>
+            )}
+            <ul className="space-y-2">
             {transactions.map((transaction) => {
               const key = `${transaction.from_user_id}-${transaction.to_user_id}-${transaction.amount}`;
               return (
@@ -107,6 +134,7 @@ export function SettleUpCard({
               );
             })}
           </ul>
+          </>
         )}
 
         {history.length > 0 && (

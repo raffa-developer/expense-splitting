@@ -142,6 +142,19 @@ describe("GET /api/groups", () => {
     await addMember(app, lisbon.id, bruno.id, alex);
     await createGroup(app, "Ski Weekend", carla);
 
+    await createExpense(
+      app,
+      lisbon.id,
+      {
+        description: "Dinner",
+        amount: 1000,
+        paidBy: alex.id,
+        splitType: "equal",
+        participants: [{ userId: alex.id }, { userId: bruno.id }]
+      },
+      alex
+    );
+
     const response = await app.inject({
       method: "GET",
       url: "/api/groups",
@@ -153,7 +166,8 @@ describe("GET /api/groups", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]).toMatchObject({
       name: "Lisbon Trip",
-      member_count: 2
+      member_count: 2,
+      your_net: 500
     });
   });
 });

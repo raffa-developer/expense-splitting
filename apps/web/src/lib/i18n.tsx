@@ -68,10 +68,24 @@ const en = {
   "groups.memberOne": "{count} member",
   "groups.memberMany": "{count} members",
 
+  "dashboard.greeting": "Hi, {name}",
+  "dashboard.subtitle": "Here is where your money stands right now.",
+  "dashboard.owedToYou": "You're owed",
+  "dashboard.youOwe": "You owe",
+  "dashboard.groupsCount": "Active groups",
+  "dashboard.mixedCurrencies": "Multiple currencies — shown per group",
+  "dashboard.balanceByGroup.title": "Your balance by group",
+  "dashboard.balanceByGroup.description":
+    "Above zero the group owes you; below zero you owe the group.",
+
   "group.back": "Groups",
   "group.personOne": "{count} person",
   "group.personMany": "{count} people",
   "group.total": "Total",
+  "group.yourPosition": "Your position",
+  "group.youPaid": "You paid",
+  "group.yourShare": "Your share",
+  "group.youSettled": "Settled",
   "group.options": "Group options",
   "group.delete": "Delete group",
   "group.deleteTitle": "Delete “{name}”?",
@@ -116,8 +130,26 @@ const en = {
   "balances.paid": "Paid",
   "balances.position": "Position",
   "balances.getsBack": "gets back {amount}",
+  "balances.getsBackLabel": "to receive",
   "balances.owes": "owes {amount}",
+  "balances.owesLabel": "to pay",
   "balances.settled": "settled",
+
+  "chart.title": "Paid vs fair share",
+  "chart.description":
+    "What each person fronted compared with their fair share of everything.",
+  "chart.paid": "Paid",
+  "chart.share": "Fair share",
+
+  "chart.paidBy.title": "Who paid",
+  "chart.paidBy.description":
+    "Each person's share of the total they fronted.",
+
+  "flow.aria": "Diagram of suggested payments between group members",
+  "flow.pays": "pays {amount}",
+  "flow.receives": "receives {amount}",
+  "flow.hint":
+    "Ribbons show who pays whom — the left side owes, the right side is owed. We match the biggest amounts first so the fewest payments are needed and nobody loses money.",
 
   "people.title": "People",
   "people.countOne": "{count} person in this group.",
@@ -266,10 +298,24 @@ const pt: Record<MessageKey, string> = {
   "groups.memberOne": "{count} membro",
   "groups.memberMany": "{count} membros",
 
+  "dashboard.greeting": "Olá, {name}",
+  "dashboard.subtitle": "Aqui está o estado do teu dinheiro.",
+  "dashboard.owedToYou": "Tens a receber",
+  "dashboard.youOwe": "Deves",
+  "dashboard.groupsCount": "Grupos ativos",
+  "dashboard.mixedCurrencies": "Várias moedas — mostrado por grupo",
+  "dashboard.balanceByGroup.title": "O teu saldo por grupo",
+  "dashboard.balanceByGroup.description":
+    "Acima de zero o grupo deve-te; abaixo de zero deves ao grupo.",
+
   "group.back": "Grupos",
   "group.personOne": "{count} pessoa",
   "group.personMany": "{count} pessoas",
   "group.total": "Total",
+  "group.yourPosition": "A tua situação",
+  "group.youPaid": "Pagaste",
+  "group.yourShare": "A tua parte",
+  "group.youSettled": "Já acertaste",
   "group.options": "Opções do grupo",
   "group.delete": "Eliminar grupo",
   "group.deleteTitle": "Eliminar «{name}»?",
@@ -314,8 +360,26 @@ const pt: Record<MessageKey, string> = {
   "balances.paid": "Pagou",
   "balances.position": "Situação",
   "balances.getsBack": "recebe {amount}",
+  "balances.getsBackLabel": "a receber",
   "balances.owes": "deve {amount}",
+  "balances.owesLabel": "a pagar",
   "balances.settled": "em dia",
+
+  "chart.title": "Pagou vs parte justa",
+  "chart.description":
+    "O que cada pessoa adiantou comparado com a sua parte justa do total.",
+  "chart.paid": "Pagou",
+  "chart.share": "Parte justa",
+
+  "chart.paidBy.title": "Quem pagou",
+  "chart.paidBy.description":
+    "A parte do total que cada pessoa adiantou.",
+
+  "flow.aria": "Diagrama dos pagamentos sugeridos entre os membros do grupo",
+  "flow.pays": "paga {amount}",
+  "flow.receives": "recebe {amount}",
+  "flow.hint":
+    "As faixas mostram quem paga a quem — à esquerda quem deve, à direita quem tem a receber. Os maiores valores são ligados primeiro para serem precisas o mínimo de transferências e ninguém perder dinheiro.",
 
   "people.title": "Pessoas",
   "people.countOne": "{count} pessoa neste grupo.",

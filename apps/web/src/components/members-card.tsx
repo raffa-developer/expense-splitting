@@ -20,11 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { avatarStyle, initialsOf } from "@/lib/avatar";
 import { errorMessage, useI18n } from "@/lib/i18n";
-
-function initials(name: string): string {
-  return name.slice(0, 1).toUpperCase();
-}
 
 export function MembersCard({
   group,
@@ -84,7 +81,7 @@ export function MembersCard({
   };
 
   return (
-    <Card>
+    <Card className="animate-rise border-border/70">
       <CardHeader>
         <CardTitle>{t("people.title")}</CardTitle>
         <CardDescription>
@@ -100,9 +97,12 @@ export function MembersCard({
               key={member.id}
               className="flex items-center justify-between gap-3"
             >
-              <span className="flex min-w-0 items-center gap-2 text-sm">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-medium">
-                  {initials(member.name)}
+              <span className="flex min-w-0 items-center gap-2.5 text-sm">
+                <span
+                  className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-medium"
+                  style={avatarStyle(member.name)}
+                >
+                  {initialsOf(member.name)}
                 </span>
                 <span className="truncate font-medium">{member.name}</span>
                 <span className="hidden truncate text-xs text-muted-foreground sm:inline">

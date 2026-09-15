@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { ChevronLeft, MoreHorizontal, Trash2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   type SettlementRecord,
   type SettlementResponse
 } from "@/api";
+import { AnimatedMoney } from "@/components/animated-money";
 import { BalancesCard } from "@/components/balances-card";
 import { BatchExpenseDialog } from "@/components/batch-expense-dialog";
 import { DeleteGroupDialog } from "@/components/delete-group-dialog";
@@ -20,16 +21,34 @@ import { SettleUpCard } from "@/components/settle-up-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
+  Card,
+  CardContent
+} from "@/components/ui/card";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/auth";
 import { errorMessage, useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { formatMoney } from "@/money";
 
 const PAGE_SIZE = 50;
+
+const PaidVsShareChart = lazy(() =>
+  import("@/components/paid-vs-share-chart").then((module) => ({
+    default: module.PaidVsShareChart
+  }))
+);
+
+const PaidByDonut = lazy(() =>
+  import("@/components/paid-by-donut").then((module) => ({
+    default: module.PaidByDonut
+  }))
+);
 
 interface GroupState {
   group: GroupDetail;
@@ -43,6 +62,7 @@ interface GroupState {
 export function GroupPage() {
   const { groupId = "" } = useParams();
   const { t } = useI18n();
+  const { user } = useAuth();
   const [state, setState] = useState<GroupState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -126,15 +146,15 @@ export function GroupPage() {
   if (!state) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-16 w-full rounded-xl" />
+        <Skeleton className="h-44 w-full rounded-xl" />
         <div className="grid gap-6 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
-            <Skeleton className="h-48 rounded-xl" />
-            <Skeleton className="h-72 rounded-xl" />
+            <Skeleton className="h-96 rounded-xl" />
+            <Skeleton className="h-64 rounded-xl" />
           </div>
           <div className="space-y-6 lg:col-span-2">
             <Skeleton className="h-64 rounded-xl" />
-            <Skeleton className="h-64 rounded-xl" />
+            <Skeleton className="h-80 rounded-xl" />
           </div>
         </div>
       </div>
@@ -144,62 +164,133 @@ export function GroupPage() {
   const { group, expenses, expensesTotal, balances, settlement, history } =
     state;
   const currency = group.currency;
+  const myBalance = balances.balances.find(
+    (balance) => balance.user_id === user?.id
+  );
+  const myPosition = myBalance?.balance ?? 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="-ml-2 text-muted-foreground"
-          >
-            <Link to="/">
-              <ChevronLeft /> {t("group.back")}
-            </Link>
-          </Button>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight">
-            {group.name}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {group.members.length === 1
-              ? t("group.personOne", { count: group.members.length })
-              : t("group.personMany", { count: group.members.length })}{" "}
-            · {currency} · {t("group.total")}{" "}
-            {formatMoney(balances.total, currency)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <BatchExpenseDialog group={group} onCreated={() => void load()} />
-          <ExpenseDialog group={group} onCreated={() => void load()} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t("group.options")}
+      <Card className="animate-rise overflow-hidden border-border/70">
+        <CardContent className="grid gap-6 py-6 lg:grid-cols-[1fr_auto]">
+          <div className="space-y-3">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="-ml-2 text-muted-foreground"
+            >
+              <Link to="/">
+                <ChevronLeft /> {t("group.back")}
+              </Link>
+            </Button>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              {group.name}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {group.members.length === 1
+                ? t("group.personOne", { count: group.members.length })
+                : t("group.personMany", { count: group.members.length })}{" "}
+              · {currency} · {t("group.total")}{" "}
+              {formatMoney(balances.total, currency)}
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <ExpenseDialog group={group} onCreated={() => void load()} />
+              <BatchExpenseDialog group={group} onCreated={() => void load()} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("group.options")}
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 /> {t("group.delete")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4 border-border/70 lg:min-w-64 lg:border-l lg:pl-8">
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                {t("group.yourPosition")}
+              </span>
+              <AnimatedMoney
+                minorUnits={Math.abs(myPosition)}
+                currency={currency}
+                className={cn(
+                  "num block text-4xl font-semibold leading-none tracking-tight",
+                  myPosition > 0
+                    ? "text-positive"
+                    : myPosition < 0
+                      ? "text-negative"
+                      : "text-foreground"
+                )}
+              />
+              <span
+                className={cn(
+                  "text-sm",
+                  myPosition > 0
+                    ? "text-positive"
+                    : myPosition < 0
+                      ? "text-negative"
+                      : "text-muted-foreground"
+                )}
               >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 /> {t("group.delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+                {myPosition > 0
+                  ? t("balances.getsBackLabel")
+                  : myPosition < 0
+                    ? t("balances.owesLabel")
+                    : t("balances.settled")}
+              </span>
+            </div>
+
+            <dl className="grid grid-cols-3 gap-4 text-sm lg:grid-cols-3">
+              <div className="space-y-0.5">
+                <dt className="text-[11px] text-muted-foreground uppercase tracking-[0.06em]">
+                  {t("group.youPaid")}
+                </dt>
+                <dd className="num font-medium">
+                  {formatMoney(myBalance?.paid ?? 0, currency)}
+                </dd>
+              </div>
+              <div className="space-y-0.5">
+                <dt className="text-[11px] text-muted-foreground uppercase tracking-[0.06em]">
+                  {t("group.yourShare")}
+                </dt>
+                <dd className="num font-medium">
+                  {formatMoney(myBalance?.owed ?? 0, currency)}
+                </dd>
+              </div>
+              <div className="space-y-0.5">
+                <dt className="text-[11px] text-muted-foreground uppercase tracking-[0.06em]">
+                  {t("group.youSettled")}
+                </dt>
+                <dd className="num font-medium">
+                  {formatMoney(myBalance?.settled ?? 0, currency)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <SettleUpCard
             groupId={group.id}
             currency={currency}
+            members={group.members}
+            highlightUserId={user?.id}
             transactions={settlement.transactions}
             history={history}
             onChanged={() => void load()}
@@ -214,6 +305,12 @@ export function GroupPage() {
           />
         </div>
         <div className="space-y-6 lg:col-span-2">
+          <Suspense fallback={<Skeleton className="h-80 rounded-xl" />}>
+            <PaidByDonut balances={balances.balances} currency={currency} />
+          </Suspense>
+          <Suspense fallback={<Skeleton className="h-80 rounded-xl" />}>
+            <PaidVsShareChart currency={currency} balances={balances.balances} />
+          </Suspense>
           <BalancesCard currency={currency} balances={balances.balances} />
           <MembersCard group={group} onChanged={() => void load()} />
         </div>
