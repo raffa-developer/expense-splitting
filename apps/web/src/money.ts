@@ -1,3 +1,9 @@
+let formattingLocale: string | undefined;
+
+export function setFormattingLocale(locale: string): void {
+  formattingLocale = locale;
+}
+
 export function toMinorUnits(value: string): number {
   const normalized = value.trim().replace(",", ".");
   if (normalized.length === 0) {
@@ -12,7 +18,7 @@ export function toMinorUnits(value: string): number {
 
 export function formatMoney(minorUnits: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(formattingLocale, {
       style: "currency",
       currency
     }).format(minorUnits / 100);

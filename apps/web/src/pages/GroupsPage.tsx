@@ -1,6 +1,31 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { ArrowRight, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api, ApiError, type Group } from "../api";
+import { toast } from "sonner";
+import { api, type Group } from "@/api";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { errorMessage, useI18n } from "@/lib/i18n";
 
 const currencies = [
   "EUR",
@@ -17,7 +42,9 @@ const currencies = [
 ];
 
 export function GroupsPage() {
+  const { t } = useI18n();
   const [groups, setGroups] = useState<Group[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +54,9 @@ export function GroupsPage() {
     try {
       setGroups(await api.listGroups());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load groups");
+      toast.error(errorMessage(err, t));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -41,10 +68,12 @@ export function GroupsPage() {
     setSubmitting(true);
     try {
       await api.createGroup(name, currency);
+      toast.success(t("groups.created"));
+      setOpen(false);
       setName("");
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create group");
+      setError(errorMessage(err, t));
     } finally {
       setSubmitting(false);
     }
@@ -52,66 +81,110 @@ export function GroupsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h1 className="text-lg font-semibold text-slate-900">Your groups</h1>
-        <form onSubmit={submit} className="mt-3 flex flex-wrap gap-2">
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="New group name, e.g. Lisbon Trip"
-            required
-            className="min-w-48 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          <select
-            value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
-            className="rounded-md border border-slate-300 px-2 py-2 text-sm"
-          >
-            {currencies.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-          >
-            Create group
-          </button>
-        </form>
-        {error && (
-          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-      </section>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {t("groups.title")}
+          </h1>
+          <p className="text-sm text-muted-foreground">{t("groups.subtitle")}</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus /> {t("groups.new")}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <form onSubmit={submit}>
+              <DialogHeader>
+                <DialogTitle>{t("groups.new")}</DialogTitle>
+                <DialogDescription>
+                  {t("groups.dialogDescription")}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="group-name">{t("groups.name")}</Label>
+                  <Input
+                    id="group-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder={t("groups.namePlaceholder")}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("groups.currency")}</Label>
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((code) => (
+                        <SelectItem key={code} value={code}>
+                          {code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? t("common.creating") : t("groups.create")}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       {groups === null ? (
-        <p className="text-sm text-slate-500">Loading…</p>
-      ) : groups.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No groups yet. Create one to get started.
-        </p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {groups.map((group) => (
-            <li key={group.id}>
-              <Link
-                to={`/groups/${group.id}`}
-                className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-400"
-              >
-                <span className="font-medium text-slate-900">{group.name}</span>
-                <span className="mt-1 block text-xs text-slate-500">
-                  {group.member_count ?? 0} member
-                  {(group.member_count ?? 0) === 1 ? "" : "s"} · {group.currency}
-                </span>
-              </Link>
-            </li>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((index) => (
+            <Skeleton key={index} className="h-24 rounded-xl" />
           ))}
-        </ul>
+        </div>
+      ) : groups.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm font-medium">{t("groups.emptyTitle")}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              {t("groups.emptyDescription")}
+            </p>
+            <Button onClick={() => setOpen(true)}>
+              <Plus /> {t("groups.new")}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {groups.map((group) => (
+            <Link key={group.id} to={`/groups/${group.id}`} className="group">
+              <Card className="h-full transition-colors hover:border-primary/50">
+                <CardContent className="flex items-center justify-between gap-3 py-5">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{group.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {(group.member_count ?? 0) === 1
+                        ? t("groups.memberOne", { count: group.member_count ?? 0 })
+                        : t("groups.memberMany", {
+                            count: group.member_count ?? 0
+                          })}{" "}
+                      · {group.currency}
+                    </p>
+                  </div>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
       )}
     </div>
   );

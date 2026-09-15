@@ -229,6 +229,16 @@ export const api = {
   createExpense: (groupId: string, payload: CreateExpensePayload) =>
     request<Expense>("POST", `/api/groups/${groupId}/expenses`, payload),
 
+  createExpensesBatch: (
+    groupId: string,
+    payload: { expenses: CreateExpensePayload[] }
+  ) =>
+    request<{ expenses: Expense[] }>(
+      "POST",
+      `/api/groups/${groupId}/expenses/batch`,
+      payload
+    ),
+
   deleteExpense: (groupId: string, expenseId: string) =>
     request<null>("DELETE", `/api/groups/${groupId}/expenses/${expenseId}`),
 

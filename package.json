@@ -15,6 +15,7 @@
     "test": "npm run test -w @expense-splitting/api",
     "bench": "npm run bench -w @expense-splitting/api",
     "seed": "npm run seed -w @expense-splitting/api",
+    "demo": "npm run demo -w @expense-splitting/api",
     "typecheck": "npm run typecheck -w @expense-splitting/api && npm run typecheck -w @expense-splitting/web",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",

@@ -943,3 +943,247 @@ describe("POST /api/groups/:id/expenses — weighted shares", () => {
     expect(response.json().error.code).toBe("INVALID_SPLIT");
   });
 });
+
+describe("POST /api/groups/:id/expenses/batch", () => {
+  const six = ["Alex", "Bruno", "Carla", "David", "Eve", "Frank"];
+
+  it("creates a night out in one request and nets the payers", async () => {
+    const { group, users, headers } = await setup(six);
+    const ids = users.map((user) => user.id);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers,
+      payload: {
+        expenses: [
+          {
+            description: "Food + drinks",
+            amount: 12000,
+            paidBy: userAt(users, 0).id,
+            splitType: "equal",
+            participants: ids.map((userId) => ({ userId }))
+          },
+          {
+            description: "Uber",
+            amount: 3000,
+            paidBy: userAt(users, 1).id,
+            splitType: "equal",
+            participants: ids.map((userId) => ({ userId }))
+          },
+          {
+            description: "Snacks",
+            amount: 1800,
+            paidBy: userAt(users, 2).id,
+            splitType: "equal",
+            participants: ids.map((userId) => ({ userId }))
+          }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(
+      response
+        .json()
+        .expenses.map((expense: { description: string }) => expense.description)
+    ).toEqual(["Food + drinks", "Uber", "Snacks"]);
+
+    const balances = await app.inject({
+      method: "GET",
+      url: `/api/groups/${group.id}/balances`,
+      headers
+    });
+    const balancesBody = balances.json();
+    expect(balancesBody.total).toBe(16800);
+    expect(
+      Object.fromEntries(
+        balancesBody.balances.map(
+          (balance: { name: string; balance: number }) => [
+            balance.name,
+            balance.balance
+          ]
+        )
+      )
+    ).toEqual({
+      Alex: 9200,
+      Bruno: 200,
+      Carla: -1000,
+      David: -2800,
+      Eve: -2800,
+      Frank: -2800
+    });
+
+    const settlement = await app.inject({
+      method: "GET",
+      url: `/api/groups/${group.id}/settlement`,
+      headers
+    });
+    expect(
+      settlement
+        .json()
+        .transactions.map((transaction: { amount: number }) => transaction.amount)
+        .sort((a: number, b: number) => b - a)
+    ).toEqual([2800, 2800, 2800, 800, 200]);
+  });
+
+  it("supports different split types per item", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno", "Carla"]);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers,
+      payload: {
+        expenses: [
+          {
+            description: "Dinner",
+            amount: 3000,
+            paidBy: userAt(users, 0).id,
+            splitType: "equal",
+            participants: users.map((user) => ({ userId: user.id }))
+          },
+          {
+            description: "Taxi",
+            amount: 2000,
+            paidBy: userAt(users, 2).id,
+            splitType: "exact",
+            participants: [
+              { userId: userAt(users, 0).id, share: 1000 },
+              { userId: userAt(users, 1).id, share: 1000 }
+            ]
+          }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.expenses[1]).toMatchObject({
+      description: "Taxi",
+      split_type: "exact"
+    });
+    expect(
+      body.expenses[1].participants.map(
+        (participant: { share: number }) => participant.share
+      )
+    ).toEqual([1000, 1000]);
+  });
+
+  it("is atomic when one item is invalid", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno"]);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers,
+      payload: {
+        expenses: [
+          {
+            description: "Valid",
+            amount: 1000,
+            paidBy: userAt(users, 0).id,
+            splitType: "equal",
+            participants: users.map((user) => ({ userId: user.id }))
+          },
+          {
+            description: "Invalid",
+            amount: 1000,
+            paidBy: userAt(users, 0).id,
+            splitType: "exact",
+            participants: [{ userId: userAt(users, 0).id, share: 900 }]
+          }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("INVALID_SPLIT");
+    expect(response.json().error.message).toContain("expenses[1]");
+
+    const list = await app.inject({
+      method: "GET",
+      url: `/api/groups/${group.id}/expenses`,
+      headers
+    });
+    expect(list.json().total).toBe(0);
+  });
+
+  it("rejects an empty batch", async () => {
+    const { group, headers } = await setup(["Alex", "Bruno"]);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers,
+      payload: { expenses: [] }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("replays the whole batch with an idempotency key", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno"]);
+    const payload = {
+      expenses: ["Dinner", "Taxi"].map((description, index) => ({
+        description,
+        amount: 1000 + index * 500,
+        paidBy: userAt(users, 0).id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      }))
+    };
+    const keyHeaders = { ...headers, "idempotency-key": "batch-key" };
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers: keyHeaders,
+      payload
+    });
+    expect(first.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers: keyHeaders,
+      payload
+    });
+    expect(second.statusCode).toBe(201);
+    expect(second.headers["idempotency-replayed"]).toBe("true");
+    expect(second.json()).toEqual(first.json());
+
+    const list = await app.inject({
+      method: "GET",
+      url: `/api/groups/${group.id}/expenses`,
+      headers
+    });
+    expect(list.json().total).toBe(2);
+  });
+
+  it("returns 403 for a non-member", async () => {
+    const { group, users } = await setup(["Alex", "Bruno"]);
+    const eve = await registerUser(app, "Eve");
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/groups/${group.id}/expenses/batch`,
+      headers: authHeaders(eve),
+      payload: {
+        expenses: [
+          {
+            description: "Dinner",
+            amount: 1000,
+            paidBy: userAt(users, 0).id,
+            splitType: "equal",
+            participants: users.map((user) => ({ userId: user.id }))
+          }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe("FORBIDDEN");
+  });
+});

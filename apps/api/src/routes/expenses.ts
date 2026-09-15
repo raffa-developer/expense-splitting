@@ -4,21 +4,18 @@ import { computeShares, type SplitType } from "../domain/splits.js";
 import { AppError } from "../errors.js";
 import { getCurrentUser } from "../plugins/auth.js";
 import { idParamSchema, uuidPattern } from "../schemas.js";
+import {
+  assertPayerAndParticipants,
+  fetchGroupUserState,
+  findExpenseOr404,
+  findExpensesByIds,
+  insertExpense,
+  listExpensesPage,
+  type ExpenseWrite
+} from "../services/expenses.js";
 import { assertGroupMember, findGroupOr404 } from "../services/groups.js";
 
-interface ExpenseRow {
-  id: string;
-  group_id: string;
-  description: string;
-  amount: number;
-  split_type: SplitType;
-  paid_by: string;
-  paid_by_name: string;
-  created_at: Date;
-  participants: { user_id: string; name: string; share: number }[];
-}
-
-interface CreateExpenseBody {
+interface ExpenseItemBody {
   description: string;
   amount: number;
   paidBy: string;
@@ -31,25 +28,7 @@ interface CreateExpenseBody {
   }[];
 }
 
-const expenseDetailParamsSchema = {
-  type: "object",
-  required: ["id", "expenseId"],
-  properties: {
-    id: { type: "string", pattern: uuidPattern },
-    expenseId: { type: "string", pattern: uuidPattern }
-  }
-} as const;
-
-const listExpensesQuerySchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
-    offset: { type: "integer", minimum: 0, default: 0 }
-  }
-} as const;
-
-const createExpenseBodySchema = {
+const expenseItemBodySchema = {
   type: "object",
   required: ["description", "amount", "paidBy", "splitType", "participants"],
   additionalProperties: false,
@@ -81,185 +60,104 @@ const createExpenseBodySchema = {
   }
 } as const;
 
-function expenseDetailQuery(single: boolean): string {
-  return `
-    SELECT e.id, e.group_id, e.description, e.amount, e.split_type, e.paid_by,
-           u.name AS paid_by_name, e.created_at,
-           COALESCE(
-             json_agg(
-               json_build_object('user_id', pu.id, 'name', pu.name, 'share', ep.share)
-               ORDER BY pu.name, pu.id
-             ) FILTER (WHERE pu.id IS NOT NULL),
-             '[]'::json
-           ) AS participants
-    FROM expenses e
-    JOIN users u ON u.id = e.paid_by
-    LEFT JOIN expense_participants ep ON ep.expense_id = e.id
-    LEFT JOIN users pu ON pu.id = ep.user_id
-    WHERE e.group_id = $1${single ? " AND e.id = $2" : ""}
-    GROUP BY e.id, u.name
-    ORDER BY e.created_at, e.id`;
+const createExpensesBatchBodySchema = {
+  type: "object",
+  required: ["expenses"],
+  additionalProperties: false,
+  properties: {
+    expenses: {
+      type: "array",
+      minItems: 1,
+      maxItems: 50,
+      items: expenseItemBodySchema
+    }
+  }
+} as const;
+
+const expenseDetailParamsSchema = {
+  type: "object",
+  required: ["id", "expenseId"],
+  properties: {
+    id: { type: "string", pattern: uuidPattern },
+    expenseId: { type: "string", pattern: uuidPattern }
+  }
+} as const;
+
+const listExpensesQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+    offset: { type: "integer", minimum: 0, default: 0 }
+  }
+} as const;
+
+function withPrefix<T>(prefix: string, fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw new AppError(
+        error.statusCode,
+        error.code,
+        `${prefix}: ${error.message}`
+      );
+    }
+    throw error;
+  }
 }
 
-async function findExpenseOr404(
-  pool: Pool,
-  groupId: string,
-  expenseId: string
-): Promise<ExpenseRow> {
-  const { rows } = await pool.query<ExpenseRow>(
-    expenseDetailQuery(true),
-    [groupId, expenseId]
-  );
-
-  const expense = rows[0];
-  if (!expense) {
-    throw new AppError(404, "EXPENSE_NOT_FOUND", "Expense not found");
-  }
-  return expense;
+function participantIdsOf(item: ExpenseItemBody): string[] {
+  return item.participants.map((participant) => participant.userId);
 }
 
-async function assertUsersInGroup(
-  pool: Pool,
-  groupId: string,
-  payerId: string,
-  participantIds: string[]
-): Promise<void> {
-  const ids = [...new Set([payerId, ...participantIds])];
-
-  const { rows: users } = await pool.query<{ id: string }>(
-    `SELECT id FROM users WHERE id = ANY($1::uuid[])`,
-    [ids]
-  );
-  const existingUsers = new Set(users.map((user) => user.id));
-
-  const { rows: members } = await pool.query<{ user_id: string }>(
-    `SELECT user_id
-     FROM group_members
-     WHERE group_id = $1 AND user_id = ANY($2::uuid[])`,
-    [groupId, ids]
-  );
-  const memberIds = new Set(members.map((member) => member.user_id));
-
-  if (!existingUsers.has(payerId)) {
-    throw new AppError(404, "USER_NOT_FOUND", "Payer not found");
-  }
-  if (!memberIds.has(payerId)) {
+function toExpenseWrite(item: ExpenseItemBody): ExpenseWrite {
+  const description = item.description.trim();
+  if (description.length === 0) {
     throw new AppError(
       400,
-      "PAYER_NOT_MEMBER",
-      "The payer is not a member of this group"
+      "INVALID_DESCRIPTION",
+      "Description must not be empty"
     );
   }
 
-  for (const participantId of participantIds) {
-    if (!existingUsers.has(participantId)) {
-      throw new AppError(
-        404,
-        "USER_NOT_FOUND",
-        `Participant ${participantId} not found`
-      );
-    }
-    if (!memberIds.has(participantId)) {
-      throw new AppError(
-        400,
-        "PARTICIPANT_NOT_MEMBER",
-        `Participant ${participantId} is not a member of this group`
-      );
-    }
-  }
+  return {
+    description,
+    amount: item.amount,
+    paidBy: item.paidBy,
+    splitType: item.splitType,
+    shares: computeShares({
+      splitType: item.splitType,
+      amount: item.amount,
+      participants: item.participants
+    })
+  };
 }
 
 export function registerExpenseRoutes(app: FastifyInstance, pool: Pool): void {
-  app.post<{ Params: { id: string }; Body: CreateExpenseBody }>(
+  app.post<{ Params: { id: string }; Body: ExpenseItemBody }>(
     "/api/groups/:id/expenses",
     {
-      schema: { params: idParamSchema, body: createExpenseBodySchema },
+      schema: { params: idParamSchema, body: expenseItemBodySchema },
       config: { idempotency: true }
     },
     async (request, reply) => {
       const group = await findGroupOr404(pool, request.params.id);
       await assertGroupMember(pool, group.id, getCurrentUser(request).id);
 
-      const description = request.body.description.trim();
-      if (description.length === 0) {
-        throw new AppError(
-          400,
-          "INVALID_DESCRIPTION",
-          "Description must not be empty"
-        );
-      }
+      const participantIds = participantIdsOf(request.body);
+      const state = await fetchGroupUserState(pool, group.id, [
+        ...new Set([request.body.paidBy, ...participantIds])
+      ]);
+      assertPayerAndParticipants(state, request.body.paidBy, participantIds);
 
-      const participantIds = request.body.participants.map(
-        (participant) => participant.userId
-      );
-
-      await assertUsersInGroup(
-        pool,
-        group.id,
-        request.body.paidBy,
-        participantIds
-      );
-
-      const shares = computeShares({
-        splitType: request.body.splitType,
-        amount: request.body.amount,
-        participants: request.body.participants
-      });
+      const write = toExpenseWrite(request.body);
 
       const client = await pool.connect();
       let expenseId: string;
       try {
         await client.query("BEGIN");
-
-        const { rows } = await client.query<{ id: string }>(
-          `INSERT INTO expenses (group_id, description, amount, split_type, paid_by)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id`,
-          [
-            group.id,
-            description,
-            request.body.amount,
-            request.body.splitType,
-            request.body.paidBy
-          ]
-        );
-
-        const inserted = rows[0];
-        if (!inserted) {
-          throw new Error("Expense insert did not return an id");
-        }
-        expenseId = inserted.id;
-
-        await client.query(
-          `INSERT INTO expense_participants (expense_id, user_id, share)
-           SELECT $1, item.user_id, item.share
-           FROM unnest($2::uuid[], $3::bigint[]) AS item(user_id, share)`,
-          [expenseId, shares.map((item) => item.userId), shares.map((item) => item.share)]
-        );
-
-        const payerUpdate = await client.query(
-          `INSERT INTO group_balances (group_id, user_id, paid)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (group_id, user_id) DO UPDATE
-           SET paid = group_balances.paid + EXCLUDED.paid`,
-          [group.id, request.body.paidBy, request.body.amount]
-        );
-        if (payerUpdate.rowCount !== 1) {
-          throw new Error("Failed to update payer balance");
-        }
-
-        const participantUpdate = await client.query(
-          `INSERT INTO group_balances (group_id, user_id, owed)
-           SELECT $1, item.user_id, item.share
-           FROM unnest($2::uuid[], $3::bigint[]) AS item(user_id, share)
-           ON CONFLICT (group_id, user_id) DO UPDATE
-           SET owed = group_balances.owed + EXCLUDED.owed`,
-          [group.id, shares.map((item) => item.userId), shares.map((item) => item.share)]
-        );
-        if (participantUpdate.rowCount !== shares.length) {
-          throw new Error("Failed to update participant balances");
-        }
-
+        expenseId = await insertExpense(client, group.id, write);
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -273,6 +171,54 @@ export function registerExpenseRoutes(app: FastifyInstance, pool: Pool): void {
     }
   );
 
+  app.post<{ Params: { id: string }; Body: { expenses: ExpenseItemBody[] } }>(
+    "/api/groups/:id/expenses/batch",
+    {
+      schema: { params: idParamSchema, body: createExpensesBatchBodySchema },
+      config: { idempotency: true }
+    },
+    async (request, reply) => {
+      const group = await findGroupOr404(pool, request.params.id);
+      await assertGroupMember(pool, group.id, getCurrentUser(request).id);
+
+      const items = request.body.expenses;
+      const referencedIds = [
+        ...new Set(
+          items.flatMap((item) => [item.paidBy, ...participantIdsOf(item)])
+        )
+      ];
+      const state = await fetchGroupUserState(pool, group.id, referencedIds);
+
+      const writes = items.map((item, index) => {
+        assertPayerAndParticipants(
+          state,
+          item.paidBy,
+          participantIdsOf(item),
+          `expenses[${index}]: `
+        );
+        return withPrefix(`expenses[${index}]`, () => toExpenseWrite(item));
+      });
+
+      const client = await pool.connect();
+      const expenseIds: string[] = [];
+      try {
+        await client.query("BEGIN");
+        for (const write of writes) {
+          expenseIds.push(await insertExpense(client, group.id, write));
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      const expenses = await findExpensesByIds(pool, group.id, expenseIds);
+      return reply.status(201).send({ expenses });
+    }
+  );
+
   app.get<{ Params: { id: string }; Querystring: { limit?: number; offset?: number } }>(
     "/api/groups/:id/expenses",
     { schema: { params: idParamSchema, querystring: listExpensesQuerySchema } },
@@ -282,23 +228,14 @@ export function registerExpenseRoutes(app: FastifyInstance, pool: Pool): void {
 
       const limit = request.query.limit ?? 50;
       const offset = request.query.offset ?? 0;
-
-      const { rows } = await pool.query<ExpenseRow>(
-        `${expenseDetailQuery(false)} LIMIT $2 OFFSET $3`,
-        [group.id, limit, offset]
-      );
-
-      const { rows: countRows } = await pool.query<{ count: number }>(
-        `SELECT COUNT(*)::int AS count FROM expenses WHERE group_id = $1`,
-        [group.id]
-      );
-
-      return {
-        expenses: rows,
-        total: countRows[0]?.count ?? 0,
+      const { expenses, total } = await listExpensesPage(
+        pool,
+        group.id,
         limit,
         offset
-      };
+      );
+
+      return { expenses, total, limit, offset };
     }
   );
 

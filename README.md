@@ -14,6 +14,7 @@ Modeled as a lightweight Splitwise-style app: users create groups, record expens
 - JWT authentication with scrypt password hashing; membership-enforced authorization
 - Idempotency keys for money-mutating requests (expenses, settlements, registration, group/member creation)
 - Paginated expense listing; user lookup by email
+- English and Portuguese (pt-PT) UI with language switcher, light/dark/system theme
 - OpenAPI 3.0 docs (Swagger UI), structured JSON logs with request ids, rate limiting, consistent error envelope
 
 ## Architecture
@@ -93,6 +94,7 @@ All routes except `/health`, `/docs`, and `/api/auth/register|login` require `Au
 | GET / DELETE | `/api/groups/:id` | Group with members / delete group |
 | POST / DELETE | `/api/groups/:id/members[/:userId]` | Add / remove members |
 | POST / GET | `/api/groups/:id/expenses` | Create expense / list expenses (paginated: `limit`, `offset`) |
+| POST | `/api/groups/:id/expenses/batch` | Create several expenses atomically (night-out entry) |
 | GET / DELETE | `/api/groups/:id/expenses/:expenseId` | Expense detail / delete |
 | GET | `/api/groups/:id/balances` | Per-member paid, owed, settled, balance |
 | GET | `/api/groups/:id/settlement` | Suggested minimal transfers |
@@ -159,6 +161,7 @@ See `apps/api/.env.example`. Highlights:
 | `npm run db:up` / `db:down` | Docker Postgres only |
 | `npm run migrate` | Apply SQL migrations |
 | `npm run seed` | Seed demo users, group, expenses, settlement (API must be running) |
+| `npm run demo -w @expense-splitting/api -- you@example.com` | Add a demo group with mixed split types to an existing account (direct DB) |
 | `npm run dev` / `dev:web` | API / web dev servers |
 | `npm run build` | Build API (tsc) and web (vite) |
 | `npm test` / `npm run bench` / `npm run typecheck` | Quality gates |

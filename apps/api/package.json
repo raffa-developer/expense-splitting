@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "bench": "node --env-file-if-exists=.env --import tsx bench/bench.ts",
     "seed": "node --env-file-if-exists=.env --import tsx scripts/seed.ts",
+    "demo": "node --env-file-if-exists=.env --import tsx scripts/demo-account.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
