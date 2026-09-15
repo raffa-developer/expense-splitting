@@ -1,0 +1,25 @@
+{
+  "name": "expense-splitting",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @expense-splitting/api",
+    "dev:api": "npm run dev -w @expense-splitting/api",
+    "dev:web": "npm run dev -w @expense-splitting/web",
+    "build": "npm run build -w @expense-splitting/api && npm run build -w @expense-splitting/web",
+    "start": "npm run start -w @expense-splitting/api",
+    "migrate": "npm run migrate -w @expense-splitting/api",
+    "test": "npm run test -w @expense-splitting/api",
+    "bench": "npm run bench -w @expense-splitting/api",
+    "seed": "npm run seed -w @expense-splitting/api",
+    "typecheck": "npm run typecheck -w @expense-splitting/api && npm run typecheck -w @expense-splitting/web",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "stack:up": "docker compose up -d --build --wait",
+    "stack:down": "docker compose down"
+  }
+}
