@@ -20,6 +20,7 @@ const en = {
   "common.deleting": "Deleting…",
   "common.removing": "Removing…",
   "common.creating": "Creating…",
+  "common.save": "Save",
 
   "app.allGroups": "All groups",
   "app.theme": "Theme",
@@ -31,6 +32,13 @@ const en = {
   "app.languageEnglish": "English",
   "app.languagePortuguese": "Português (PT)",
   "app.toggleTheme": "Toggle theme",
+
+  "nav.dashboard": "Dashboard",
+  "nav.groups": "Groups",
+  "nav.yourGroups": "Your groups",
+  "nav.noGroups": "No groups yet.",
+  "nav.menu": "Menu",
+  "nav.openMenu": "Open menu",
 
   "auth.loginTitle": "Welcome back",
   "auth.registerTitle": "Create your account",
@@ -49,11 +57,11 @@ const en = {
   "auth.submitting": "Please wait…",
   "auth.welcomeBack": "Welcome back",
   "auth.accountCreated": "Account created",
-  "auth.emailTaken": "That email already has an account — enter your password.",
+  "auth.emailTaken": "That email already has an account. Enter your password.",
 
   "groups.title": "Groups",
   "groups.subtitle":
-    "Create a group for a trip, a house, or a night out — then add what everyone paid.",
+    "Create a group for a trip, a house, or a night out, then add what everyone paid.",
   "groups.new": "New group",
   "groups.dialogDescription":
     "Give it a name and choose the currency everyone will use.",
@@ -69,19 +77,27 @@ const en = {
   "groups.memberMany": "{count} members",
 
   "dashboard.greeting": "Hi, {name}",
-  "dashboard.subtitle": "Here is where your money stands right now.",
+  "dashboard.subtitle": "Where you stand across your groups.",
+  "dashboard.net": "Net",
+  "dashboard.yourBalance": "Your balance",
+  "dashboard.newExpense": "New expense",
+  "dashboard.addExpenseAria": "Add expense to {name}",
   "dashboard.owedToYou": "You're owed",
   "dashboard.youOwe": "You owe",
-  "dashboard.groupsCount": "Active groups",
-  "dashboard.mixedCurrencies": "Multiple currencies — shown per group",
-  "dashboard.balanceByGroup.title": "Your balance by group",
-  "dashboard.balanceByGroup.description":
-    "Above zero the group owes you; below zero you owe the group.",
+  "dashboard.groupsSubSame": "All in {currency}.",
+  "dashboard.groupsSubMixed": "Across {count} currencies.",
+  "dashboard.mixedCurrencies": "Multiple currencies, shown per group.",
 
   "group.back": "Groups",
   "group.personOne": "{count} person",
   "group.personMany": "{count} people",
-  "group.total": "Total",
+  "group.metaTotal": "Total {total}, in {currency}.",
+  "group.tabOverview": "Overview",
+  "group.tabExpenses": "Expenses",
+  "group.tabPeople": "People",
+  "group.emptyExpensesTitle": "No expenses yet.",
+  "group.emptyExpensesBody":
+    "Add the first expense and balances, settle up, and payment history appear here.",
   "group.yourPosition": "Your position",
   "group.youPaid": "You paid",
   "group.yourShare": "Your share",
@@ -109,7 +125,9 @@ const en = {
   "expenses.empty": "Nothing here yet.",
   "expenses.emptyHint": "Add the first expense with the buttons at the top.",
   "expenses.paidLine":
-    "{name} paid {amount} · split {split} between {count} {people}",
+    "{name} paid {amount}, split {split} between {count} {people}.",
+  "expenses.paidByLine":
+    "{name} paid, split {split} between {count} {people}.",
   "expenses.splitEqual": "equally",
   "expenses.splitExact": "as exact amounts",
   "expenses.splitPercentage": "by percentage",
@@ -122,6 +140,7 @@ const en = {
     "“{name}” will be removed and everyone's balances will be updated. This cannot be undone.",
   "expenses.deleted": "Expense deleted",
   "expenses.deleteAria": "Delete {name}",
+  "expenses.editAria": "Edit {name}",
 
   "balances.title": "Balances",
   "balances.description":
@@ -141,15 +160,9 @@ const en = {
   "chart.paid": "Paid",
   "chart.share": "Fair share",
 
-  "chart.paidBy.title": "Who paid",
-  "chart.paidBy.description":
-    "Each person's share of the total they fronted.",
-
   "flow.aria": "Diagram of suggested payments between group members",
-  "flow.pays": "pays {amount}",
-  "flow.receives": "receives {amount}",
   "flow.hint":
-    "Ribbons show who pays whom — the left side owes, the right side is owed. We match the biggest amounts first so the fewest payments are needed and nobody loses money.",
+    "Arrows show who pays whom. The biggest amounts are matched first, so the fewest payments are needed.",
 
   "people.title": "People",
   "people.countOne": "{count} person in this group.",
@@ -186,6 +199,9 @@ const en = {
   "expenseDialog.hintShares": "Shares are weights, e.g. 2 and 1.",
   "expenseDialog.submit": "Add expense",
   "expenseDialog.added": "Expense added",
+  "expenseDialog.editTitle": "Edit expense",
+  "expenseDialog.editDescription": "Change the details of this expense.",
+  "expenseDialog.updated": "Expense updated",
   "expenseDialog.errorAmount": "Enter a valid amount, for example 24.50.",
   "expenseDialog.errorParticipants":
     "Select at least one person to share this expense.",
@@ -249,6 +265,7 @@ const pt: Record<MessageKey, string> = {
   "common.deleting": "A eliminar…",
   "common.removing": "A remover…",
   "common.creating": "A criar…",
+  "common.save": "Guardar",
 
   "app.allGroups": "Todos os grupos",
   "app.theme": "Tema",
@@ -260,6 +277,13 @@ const pt: Record<MessageKey, string> = {
   "app.languageEnglish": "English",
   "app.languagePortuguese": "Português (PT)",
   "app.toggleTheme": "Mudar tema",
+
+  "nav.dashboard": "Painel",
+  "nav.groups": "Grupos",
+  "nav.yourGroups": "Os teus grupos",
+  "nav.noGroups": "Ainda não há grupos.",
+  "nav.menu": "Menu",
+  "nav.openMenu": "Abrir menu",
 
   "auth.loginTitle": "Bem-vindo de volta",
   "auth.registerTitle": "Cria a tua conta",
@@ -279,11 +303,11 @@ const pt: Record<MessageKey, string> = {
   "auth.welcomeBack": "Bem-vindo de volta",
   "auth.accountCreated": "Conta criada",
   "auth.emailTaken":
-    "Já existe uma conta com este email — introduz a palavra-passe.",
+    "Já existe uma conta com este email. Introduz a palavra-passe.",
 
   "groups.title": "Grupos",
   "groups.subtitle":
-    "Cria um grupo para uma viagem, uma casa ou uma saída à noite — depois adiciona o que cada um pagou.",
+    "Cria um grupo para uma viagem, uma casa ou uma saída à noite, depois adiciona o que cada um pagou.",
   "groups.new": "Novo grupo",
   "groups.dialogDescription":
     "Dá-lhe um nome e escolhe a moeda que todos vão usar.",
@@ -299,19 +323,27 @@ const pt: Record<MessageKey, string> = {
   "groups.memberMany": "{count} membros",
 
   "dashboard.greeting": "Olá, {name}",
-  "dashboard.subtitle": "Aqui está o estado do teu dinheiro.",
+  "dashboard.subtitle": "A tua posição em todos os grupos.",
+  "dashboard.net": "Saldo",
+  "dashboard.yourBalance": "O teu saldo",
+  "dashboard.newExpense": "Nova despesa",
+  "dashboard.addExpenseAria": "Adicionar despesa a {name}",
   "dashboard.owedToYou": "Tens a receber",
   "dashboard.youOwe": "Deves",
-  "dashboard.groupsCount": "Grupos ativos",
-  "dashboard.mixedCurrencies": "Várias moedas — mostrado por grupo",
-  "dashboard.balanceByGroup.title": "O teu saldo por grupo",
-  "dashboard.balanceByGroup.description":
-    "Acima de zero o grupo deve-te; abaixo de zero deves ao grupo.",
+  "dashboard.groupsSubSame": "Todas em {currency}.",
+  "dashboard.groupsSubMixed": "Em {count} moedas.",
+  "dashboard.mixedCurrencies": "Várias moedas, mostradas por grupo.",
 
   "group.back": "Grupos",
   "group.personOne": "{count} pessoa",
   "group.personMany": "{count} pessoas",
-  "group.total": "Total",
+  "group.metaTotal": "Total {total}, em {currency}.",
+  "group.tabOverview": "Resumo",
+  "group.tabExpenses": "Despesas",
+  "group.tabPeople": "Pessoas",
+  "group.emptyExpensesTitle": "Ainda não há despesas.",
+  "group.emptyExpensesBody":
+    "Adiciona a primeira despesa e os saldos, os acertos e o histórico aparecem aqui.",
   "group.yourPosition": "A tua situação",
   "group.youPaid": "Pagaste",
   "group.yourShare": "A tua parte",
@@ -339,7 +371,9 @@ const pt: Record<MessageKey, string> = {
   "expenses.empty": "Ainda não há nada aqui.",
   "expenses.emptyHint": "Adiciona a primeira despesa com os botões em cima.",
   "expenses.paidLine":
-    "{name} pagou {amount} · dividido {split} por {count} {people}",
+    "{name} pagou {amount}, dividido {split} por {count} {people}.",
+  "expenses.paidByLine":
+    "{name} pagou, dividido {split} por {count} {people}.",
   "expenses.splitEqual": "igualmente",
   "expenses.splitExact": "em valores exatos",
   "expenses.splitPercentage": "em percentagem",
@@ -352,6 +386,7 @@ const pt: Record<MessageKey, string> = {
     "«{name}» será eliminada e os saldos de todos serão atualizados. Esta ação não pode ser anulada.",
   "expenses.deleted": "Despesa eliminada",
   "expenses.deleteAria": "Eliminar {name}",
+  "expenses.editAria": "Editar {name}",
 
   "balances.title": "Saldos",
   "balances.description":
@@ -371,15 +406,9 @@ const pt: Record<MessageKey, string> = {
   "chart.paid": "Pagou",
   "chart.share": "Parte justa",
 
-  "chart.paidBy.title": "Quem pagou",
-  "chart.paidBy.description":
-    "A parte do total que cada pessoa adiantou.",
-
   "flow.aria": "Diagrama dos pagamentos sugeridos entre os membros do grupo",
-  "flow.pays": "paga {amount}",
-  "flow.receives": "recebe {amount}",
   "flow.hint":
-    "As faixas mostram quem paga a quem — à esquerda quem deve, à direita quem tem a receber. Os maiores valores são ligados primeiro para serem precisas o mínimo de transferências e ninguém perder dinheiro.",
+    "As setas mostram quem paga a quem. Os maiores valores são ligados primeiro, para serem precisas o mínimo de transferências.",
 
   "people.title": "Pessoas",
   "people.countOne": "{count} pessoa neste grupo.",
@@ -416,6 +445,9 @@ const pt: Record<MessageKey, string> = {
   "expenseDialog.hintShares": "As quotas são pesos, por exemplo 2 e 1.",
   "expenseDialog.submit": "Adicionar despesa",
   "expenseDialog.added": "Despesa adicionada",
+  "expenseDialog.editTitle": "Editar despesa",
+  "expenseDialog.editDescription": "Altera os detalhes desta despesa.",
+  "expenseDialog.updated": "Despesa atualizada",
   "expenseDialog.errorAmount": "Introduz um valor válido, por exemplo 24,50.",
   "expenseDialog.errorParticipants":
     "Seleciona pelo menos uma pessoa para partilhar esta despesa.",

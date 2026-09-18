@@ -1,28 +1,40 @@
 import type { CSSProperties } from "react";
 
-const chartVariables = [
+const solidVariables = [
   "--chart-1",
   "--chart-2",
-  "--chart-3",
   "--chart-4",
-  "--chart-5"
+  "--chart-5",
+  "--primary"
 ];
 
 function hashName(name: string): number {
-  let hash = 0;
+  let hash = 0x811c9dc5;
   for (let index = 0; index < name.length; index++) {
-    hash = (hash * 31 + name.charCodeAt(index)) % 9973;
+    hash ^= name.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
   }
-  return hash;
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x7feb352d);
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x846ca68b);
+  hash ^= hash >>> 16;
+  return hash >>> 0;
+}
+
+function variableFor(name: string): string {
+  return solidVariables[hashName(name) % solidVariables.length] ?? "--chart-1";
 }
 
 export function avatarStyle(name: string): CSSProperties {
-  const variable =
-    chartVariables[hashName(name) % chartVariables.length] ?? "--chart-1";
   return {
-    background: `color-mix(in oklab, var(${variable}) 18%, transparent)`,
-    color: `var(${variable})`
+    background: `var(${variableFor(name)})`,
+    color: "var(--avatar-foreground)"
   };
+}
+
+export function avatarFill(name: string): string {
+  return `var(${variableFor(name)})`;
 }
 
 export function initialsOf(name: string): string {

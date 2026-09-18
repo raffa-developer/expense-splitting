@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, type GroupDetail } from "@/api";
+import { notifyGroupsChanged } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,8 +33,9 @@ export function DeleteGroupDialog({
     try {
       await api.deleteGroup(group.id);
       toast.success(t("group.deleted"));
+      notifyGroupsChanged();
       onOpenChange(false);
-      navigate("/");
+      navigate("/groups");
     } catch (err) {
       toast.error(errorMessage(err, t));
     } finally {

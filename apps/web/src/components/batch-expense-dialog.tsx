@@ -16,6 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { formatMoney, toMinorUnits } from "@/money";
@@ -184,7 +191,7 @@ export function BatchExpenseDialog({
                     aria-label={t("batchDialog.items")}
                   />
                   <Input
-                    className="col-span-6 sm:col-span-3"
+                    className="money col-span-6 sm:col-span-3"
                     inputMode="decimal"
                     value={item.amount}
                     onChange={(event) =>
@@ -195,20 +202,26 @@ export function BatchExpenseDialog({
                       currency: group.currency
                     })}
                   />
-                  <select
-                    className="col-span-5 h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs dark:bg-input/30 sm:col-span-3"
+                  <Select
                     value={item.paidBy}
-                    onChange={(event) =>
-                      updateItem(item.key, { paidBy: event.target.value })
+                    onValueChange={(value) =>
+                      updateItem(item.key, { paidBy: value })
                     }
-                    aria-label={t("batchDialog.whoPaid")}
                   >
-                    {group.members.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      className="col-span-5 w-full sm:col-span-3"
+                      aria-label={t("batchDialog.whoPaid")}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {group.members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     variant="ghost"
@@ -239,7 +252,7 @@ export function BatchExpenseDialog({
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-muted px-4 py-3 text-sm">
             <span className="text-muted-foreground">
               {t("batchDialog.total")}{" "}
               <span className="font-medium text-foreground">

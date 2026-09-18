@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
-import type { Expense, SplitType } from "@/api";
+import { Pencil, Trash2 } from "lucide-react";
+import type { Expense, GroupDetail, SplitType } from "@/api";
+import { ExpenseDialog } from "@/components/expense-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,22 +30,27 @@ const splitKeys: Record<SplitType, MessageKey> = {
 };
 
 export function ExpensesCard({
+  group,
   currency,
   expenses,
   total,
   loadingMore,
   onLoadMore,
-  onDelete
+  onDelete,
+  onUpdated
 }: {
+  group: GroupDetail;
   currency: string;
   expenses: Expense[];
   total: number;
   loadingMore: boolean;
   onLoadMore: () => void;
   onDelete: (expenseId: string) => Promise<void>;
+  onUpdated: () => void;
 }) {
   const { t } = useI18n();
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  const [editing, setEditing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const dateFormatter = useMemo(
@@ -72,7 +78,7 @@ export function ExpensesCard({
   }, [expenses, dateFormatter]);
 
   return (
-    <Card className="animate-rise border-border/70">
+    <Card>
       <CardHeader>
         <CardTitle>{t("expenses.title")}</CardTitle>
         <CardDescription>
@@ -85,14 +91,14 @@ export function ExpensesCard({
       </CardHeader>
       <CardContent>
         {expenses.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl bg-muted p-6 text-center text-sm text-muted-foreground">
             {t("expenses.emptyHint")}
           </p>
         ) : (
           <div className="space-y-5">
             {grouped.map(([date, items]) => (
               <div key={date}>
-                <p className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                <p className="text-xs font-medium text-muted-foreground">
                   {date}
                 </p>
                 <ul className="mt-1.5 divide-y divide-border/60">
@@ -109,13 +115,17 @@ export function ExpensesCard({
                         {initialsOf(expense.paid_by_name)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                          {expense.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {t("expenses.paidLine", {
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="truncate text-sm font-medium">
+                            {expense.description}
+                          </p>
+                          <span className="money shrink-0 text-sm font-medium">
+                            {formatMoney(expense.amount, currency)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {t("expenses.paidByLine", {
                             name: expense.paid_by_name,
-                            amount: formatMoney(expense.amount, currency),
                             split: t(splitKeys[expense.split_type]),
                             count: expense.participants.length,
                             people:
@@ -125,17 +135,30 @@ export function ExpensesCard({
                           })}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-destructive"
-                        aria-label={t("expenses.deleteAria", {
-                          name: expense.description
-                        })}
-                        onClick={() => setPendingDelete(expense)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-foreground"
+                          aria-label={t("expenses.editAria", {
+                            name: expense.description
+                          })}
+                          onClick={() => setEditing(expense)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          aria-label={t("expenses.deleteAria", {
+                            name: expense.description
+                          })}
+                          onClick={() => setPendingDelete(expense)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -147,7 +170,7 @@ export function ExpensesCard({
         {expenses.length < total && (
           <Button
             variant="outline"
-            className="mt-4 w-full"
+            className="mt-4 w-full rounded-full"
             disabled={loadingMore}
             onClick={onLoadMore}
           >
@@ -157,6 +180,23 @@ export function ExpensesCard({
           </Button>
         )}
       </CardContent>
+
+      {editing && (
+        <ExpenseDialog
+          group={group}
+          expense={editing}
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditing(null);
+            }
+          }}
+          onUpdated={() => {
+            setEditing(null);
+            onUpdated();
+          }}
+        />
+      )}
 
       <Dialog
         open={pendingDelete !== null}

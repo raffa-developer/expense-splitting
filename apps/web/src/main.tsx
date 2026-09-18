@@ -17,7 +17,8 @@ createRoot(container).render(
   <StrictMode>
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="light"
+      storageKey="expense-splitting-theme"
       enableSystem
       disableTransitionOnChange
     >
@@ -27,7 +28,7 @@ createRoot(container).render(
             <App />
           </AuthProvider>
         </BrowserRouter>
-        <Toaster position="bottom-right" richColors closeButton />
+        <Toaster position="bottom-right" closeButton />
       </I18nProvider>
     </ThemeProvider>
   </StrictMode>

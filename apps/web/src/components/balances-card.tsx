@@ -1,5 +1,4 @@
 import type { Balance } from "@/api";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -29,18 +28,18 @@ export function BalancesCard({
   const { t } = useI18n();
 
   return (
-    <Card className="animate-rise border-border/70">
+    <Card>
       <CardHeader>
         <CardTitle>{t("balances.title")}</CardTitle>
         <CardDescription>{t("balances.description")}</CardDescription>
       </CardHeader>
-      <CardContent className="px-0">
+      <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-6">{t("balances.person")}</TableHead>
+              <TableHead>{t("balances.person")}</TableHead>
               <TableHead className="text-right">{t("balances.paid")}</TableHead>
-              <TableHead className="pr-6 text-right">
+              <TableHead className="text-right">
                 {t("balances.position")}
               </TableHead>
             </TableRow>
@@ -48,10 +47,10 @@ export function BalancesCard({
           <TableBody>
             {balances.map((balance) => (
               <TableRow key={balance.user_id}>
-                <TableCell className="pl-6">
+                <TableCell>
                   <span className="flex items-center gap-2.5">
                     <span
-                      className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-medium"
+                      className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-medium"
                       style={avatarStyle(balance.name)}
                     >
                       {initialsOf(balance.name)}
@@ -59,30 +58,32 @@ export function BalancesCard({
                     <span className="truncate font-medium">{balance.name}</span>
                   </span>
                 </TableCell>
-                <TableCell className="num text-right text-muted-foreground">
+                <TableCell className="money text-right text-muted-foreground">
                   {formatMoney(balance.paid, currency)}
                 </TableCell>
-                <TableCell className="pr-6 text-right">
+                <TableCell className="text-right">
                   {balance.balance > 0 ? (
-                    <Badge
-                      variant="outline"
-                      className="num border-positive/40 text-positive"
-                    >
-                      {t("balances.getsBack", {
-                        amount: formatMoney(balance.balance, currency)
-                      })}
-                    </Badge>
+                    <span className="inline-flex items-baseline gap-1.5">
+                      <span className="money text-sm font-medium text-positive">
+                        {formatMoney(balance.balance, currency)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("balances.getsBackLabel")}
+                      </span>
+                    </span>
                   ) : balance.balance < 0 ? (
-                    <Badge
-                      variant="outline"
-                      className="num border-negative/40 text-negative"
-                    >
-                      {t("balances.owes", {
-                        amount: formatMoney(-balance.balance, currency)
-                      })}
-                    </Badge>
+                    <span className="inline-flex items-baseline gap-1.5">
+                      <span className="money text-sm font-medium text-negative">
+                        {formatMoney(-balance.balance, currency)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("balances.owesLabel")}
+                      </span>
+                    </span>
                   ) : (
-                    <Badge variant="secondary">{t("balances.settled")}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {t("balances.settled")}
+                    </span>
                   )}
                 </TableCell>
               </TableRow>

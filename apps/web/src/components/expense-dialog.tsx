@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   api,
   type CreateExpensePayload,
+  type Expense,
   type GroupDetail,
   type SplitType
 } from "@/api";
@@ -39,33 +40,86 @@ const splitTypeKeys: Record<SplitType, MessageKey> = {
   shares: "expenseDialog.splitShares"
 };
 
+function prefilledValues(expense?: Expense): Record<string, string> {
+  if (!expense) {
+    return {};
+  }
+  const map: Record<string, string> = {};
+  for (const participant of expense.participants) {
+    if (expense.split_type === "exact") {
+      map[participant.user_id] = String(participant.share / 100);
+    } else if (expense.split_type === "percentage") {
+      map[participant.user_id] =
+        participant.percentage !== null && participant.percentage !== undefined
+          ? String(participant.percentage)
+          : "";
+    } else if (expense.split_type === "shares") {
+      map[participant.user_id] =
+        participant.weight !== null && participant.weight !== undefined
+          ? String(participant.weight)
+          : "";
+    }
+  }
+  return map;
+}
+
 export function ExpenseDialog({
   group,
-  onCreated
+  onCreated,
+  onUpdated,
+  expense,
+  open: openProp,
+  onOpenChange
 }: {
   group: GroupDetail;
-  onCreated: () => void;
+  onCreated?: () => void;
+  onUpdated?: () => void;
+  expense?: Expense;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paidBy, setPaidBy] = useState(group.members[0]?.id ?? "");
-  const [splitType, setSplitType] = useState<SplitType>("equal");
-  const [participantIds, setParticipantIds] = useState<string[]>(
-    group.members.map((member) => member.id)
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (next: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
+  const [description, setDescription] = useState(expense?.description ?? "");
+  const [amount, setAmount] = useState(
+    expense ? String(expense.amount / 100) : ""
   );
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [paidBy, setPaidBy] = useState(
+    expense?.paid_by ?? group.members[0]?.id ?? ""
+  );
+  const [splitType, setSplitType] = useState<SplitType>(
+    expense?.split_type ?? "equal"
+  );
+  const [participantIds, setParticipantIds] = useState<string[]>(
+    expense
+      ? expense.participants.map((participant) => participant.user_id)
+      : group.members.map((member) => member.id)
+  );
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    prefilledValues(expense)
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
-    setDescription("");
-    setAmount("");
-    setPaidBy(group.members[0]?.id ?? "");
-    setSplitType("equal");
-    setParticipantIds(group.members.map((member) => member.id));
-    setValues({});
+    setDescription(expense?.description ?? "");
+    setAmount(expense ? String(expense.amount / 100) : "");
+    setPaidBy(expense?.paid_by ?? group.members[0]?.id ?? "");
+    setSplitType(expense?.split_type ?? "equal");
+    setParticipantIds(
+      expense
+        ? expense.participants.map((participant) => participant.user_id)
+        : group.members.map((member) => member.id)
+    );
+    setValues(prefilledValues(expense));
     setError(null);
   };
 
@@ -130,18 +184,29 @@ export function ExpenseDialog({
       return;
     }
 
+    const payload: CreateExpensePayload = {
+      description,
+      amount: amountMinor,
+      paidBy,
+      splitType,
+      participants
+    };
+
     setSubmitting(true);
     try {
-      await api.createExpense(group.id, {
-        description,
-        amount: amountMinor,
-        paidBy,
-        splitType,
-        participants
-      });
-      toast.success(t("expenseDialog.added"));
+      if (expense) {
+        await api.updateExpense(group.id, expense.id, payload);
+        toast.success(t("expenseDialog.updated"));
+      } else {
+        await api.createExpense(group.id, payload);
+        toast.success(t("expenseDialog.added"));
+      }
       setOpen(false);
-      onCreated();
+      if (expense) {
+        onUpdated?.();
+      } else {
+        onCreated?.();
+      }
     } catch (err) {
       setError(errorMessage(err, t));
     } finally {
@@ -160,17 +225,23 @@ export function ExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus /> {t("expenseDialog.title")}
-        </Button>
-      </DialogTrigger>
+      {!expense && (
+        <DialogTrigger asChild>
+          <Button>
+            <Plus /> {t("expenseDialog.title")}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <form onSubmit={submit} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>{t("expenseDialog.title")}</DialogTitle>
+            <DialogTitle>
+              {expense ? t("expenseDialog.editTitle") : t("expenseDialog.title")}
+            </DialogTitle>
             <DialogDescription>
-              {t("expenseDialog.description")}
+              {expense
+                ? t("expenseDialog.editDescription")
+                : t("expenseDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -193,6 +264,7 @@ export function ExpenseDialog({
               </Label>
               <Input
                 id="expense-amount"
+                className="money"
                 inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
@@ -241,13 +313,13 @@ export function ExpenseDialog({
 
           <div className="space-y-2">
             <Label>{t("expenseDialog.participants")}</Label>
-            <ul className="divide-y rounded-md border">
+            <ul className="space-y-1">
               {group.members.map((member) => {
                 const selected = participantIds.includes(member.id);
                 return (
                   <li
                     key={member.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2"
+                    className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-muted"
                   >
                     <label className="flex flex-1 cursor-pointer items-center gap-2 text-sm">
                       <Checkbox
@@ -308,7 +380,11 @@ export function ExpenseDialog({
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? t("common.saving") : t("expenseDialog.submit")}
+              {submitting
+                ? t("common.saving")
+                : expense
+                  ? t("common.save")
+                  : t("expenseDialog.submit")}
             </Button>
           </DialogFooter>
         </form>

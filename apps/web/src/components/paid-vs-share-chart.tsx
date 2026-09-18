@@ -15,11 +15,9 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card";
+import { useChartColors } from "@/lib/chart-theme";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney } from "@/money";
-
-const PAID_COLOR = "#0d9488";
-const SHARE_COLOR = "#a1a1aa";
 
 interface TooltipEntry {
   dataKey?: string | number;
@@ -49,7 +47,7 @@ function BarTooltip({
   }
 
   return (
-    <div className="min-w-36 rounded-md border bg-popover px-3 py-2 text-xs shadow-md">
+    <div className="min-w-36 rounded-xl border border-border bg-popover px-3 py-2 text-xs shadow-soft">
       <p className="font-medium text-popover-foreground">{label}</p>
       <ul className="mt-1.5 space-y-1">
         {payload.map((entry) => (
@@ -80,6 +78,7 @@ export function PaidVsShareChart({
   balances: Balance[];
 }) {
   const { t } = useI18n();
+  const colors = useChartColors();
 
   const data = balances.map((balance) => ({
     name: balance.name,
@@ -94,7 +93,7 @@ export function PaidVsShareChart({
         <CardDescription>{t("chart.description")}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-56 w-full">
+        <div className="mx-auto h-56 w-full max-w-2xl text-muted-foreground">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={data}
@@ -104,21 +103,25 @@ export function PaidVsShareChart({
               <CartesianGrid
                 vertical={false}
                 strokeDasharray="3 3"
-                stroke="rgba(128,128,140,0.25)"
+                stroke={colors.grid}
               />
               <XAxis
                 dataKey="name"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "currentColor" }}
                 interval={0}
                 tickFormatter={(value: string) =>
                   value.length > 7 ? `${value.slice(0, 7)}…` : value
                 }
               />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "currentColor" }}
+              />
               <Tooltip
-                cursor={{ fill: "rgba(128,128,140,0.12)" }}
+                cursor={{ fill: colors.cursor, fillOpacity: 0.5 }}
                 content={
                   <BarTooltip
                     currency={currency}
@@ -127,24 +130,18 @@ export function PaidVsShareChart({
                   />
                 }
               />
-              <Bar dataKey="paid" fill={PAID_COLOR} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="share" fill={SHARE_COLOR} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="paid" fill={colors.paid} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="share" fill={colors.share} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <span
-              className="size-2.5 rounded-sm"
-              style={{ background: PAID_COLOR }}
-            />
+            <span className="size-2.5 rounded-sm bg-chart-1" />
             {t("chart.paid")}
           </span>
           <span className="flex items-center gap-1.5">
-            <span
-              className="size-2.5 rounded-sm"
-              style={{ background: SHARE_COLOR }}
-            />
+            <span className="size-2.5 rounded-sm bg-chart-2" />
             {t("chart.share")}
           </span>
         </div>

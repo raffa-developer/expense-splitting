@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { ChevronLeft, MoreHorizontal, Trash2 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   api,
@@ -18,12 +18,10 @@ import { ExpenseDialog } from "@/components/expense-dialog";
 import { ExpensesCard } from "@/components/expenses-card";
 import { MembersCard } from "@/components/members-card";
 import { SettleUpCard } from "@/components/settle-up-card";
+import { useGroupNavRegistration } from "@/components/app-shell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +29,9 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/auth";
+import { avatarStyle, initialsOf } from "@/lib/avatar";
 import { errorMessage, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/money";
@@ -44,12 +44,6 @@ const PaidVsShareChart = lazy(() =>
   }))
 );
 
-const PaidByDonut = lazy(() =>
-  import("@/components/paid-by-donut").then((module) => ({
-    default: module.PaidByDonut
-  }))
-);
-
 interface GroupState {
   group: GroupDetail;
   expenses: Expense[];
@@ -59,14 +53,33 @@ interface GroupState {
   history: SettlementRecord[];
 }
 
+type TabValue = "overview" | "expenses" | "people";
+
 export function GroupPage() {
   const { groupId = "" } = useParams();
   const { t } = useI18n();
   const { user } = useAuth();
   const [state, setState] = useState<GroupState | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab: TabValue =
+    tabParam === "expenses" || tabParam === "people" ? tabParam : "overview";
+  const setTab = (value: TabValue) => {
+    setSearchParams(value === "overview" ? {} : { tab: value });
+  };
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setExpenseOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = useCallback(async () => {
     try {
@@ -128,6 +141,24 @@ export function GroupPage() {
     }
   };
 
+  const myPosition = state
+    ? (state.balances.balances.find((balance) => balance.user_id === user?.id)
+        ?.balance ?? 0)
+    : 0;
+  const navInfo = useMemo(
+    () =>
+      state
+        ? {
+            id: state.group.id,
+            name: state.group.name,
+            net: myPosition,
+            currency: state.group.currency
+          }
+        : null,
+    [state, myPosition]
+  );
+  useGroupNavRegistration(navInfo);
+
   if (error) {
     return (
       <div className="space-y-4">
@@ -135,9 +166,7 @@ export function GroupPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
         <Button asChild variant="outline">
-          <Link to="/">
-            <ChevronLeft /> {t("group.back")}
-          </Link>
+          <Link to="/groups">{t("app.allGroups")}</Link>
         </Button>
       </div>
     );
@@ -146,17 +175,10 @@ export function GroupPage() {
   if (!state) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-44 w-full rounded-xl" />
-        <div className="grid gap-6 lg:grid-cols-5">
-          <div className="space-y-6 lg:col-span-3">
-            <Skeleton className="h-96 rounded-xl" />
-            <Skeleton className="h-64 rounded-xl" />
-          </div>
-          <div className="space-y-6 lg:col-span-2">
-            <Skeleton className="h-64 rounded-xl" />
-            <Skeleton className="h-80 rounded-xl" />
-          </div>
-        </div>
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-10 w-72 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-72 rounded-2xl" />
       </div>
     );
   }
@@ -167,154 +189,199 @@ export function GroupPage() {
   const myBalance = balances.balances.find(
     (balance) => balance.user_id === user?.id
   );
-  const myPosition = myBalance?.balance ?? 0;
+  const memberCount = group.members.length;
 
   return (
     <div className="space-y-6">
-      <Card className="animate-rise overflow-hidden border-border/70">
-        <CardContent className="grid gap-6 py-6 lg:grid-cols-[1fr_auto]">
-          <div className="space-y-3">
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="-ml-2 text-muted-foreground"
-            >
-              <Link to="/">
-                <ChevronLeft /> {t("group.back")}
-              </Link>
-            </Button>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <span
+            className="grid size-12 shrink-0 place-items-center rounded-full text-sm font-semibold"
+            style={avatarStyle(group.name)}
+          >
+            {initialsOf(group.name)}
+          </span>
+          <div className="space-y-1.5">
             <h1 className="text-3xl font-semibold tracking-tight">
               {group.name}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {group.members.length === 1
-                ? t("group.personOne", { count: group.members.length })
-                : t("group.personMany", { count: group.members.length })}{" "}
-              · {currency} · {t("group.total")}{" "}
-              {formatMoney(balances.total, currency)}
+              {memberCount === 1
+                ? t("group.personOne", { count: memberCount })
+                : t("group.personMany", { count: memberCount })}
+              .{" "}
+              {t("group.metaTotal", {
+                total: formatMoney(balances.total, currency),
+                currency
+              })}
             </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <ExpenseDialog group={group} onCreated={() => void load()} />
-              <BatchExpenseDialog group={group} onCreated={() => void load()} />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("group.options")}
-                  >
-                    <MoreHorizontal />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 /> {t("group.delete")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
           </div>
-
-          <div className="flex flex-col gap-4 border-border/70 lg:min-w-64 lg:border-l lg:pl-8">
-            <div className="space-y-1">
-              <span className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-                {t("group.yourPosition")}
-              </span>
-              <AnimatedMoney
-                minorUnits={Math.abs(myPosition)}
-                currency={currency}
-                className={cn(
-                  "num block text-4xl font-semibold leading-none tracking-tight",
-                  myPosition > 0
-                    ? "text-positive"
-                    : myPosition < 0
-                      ? "text-negative"
-                      : "text-foreground"
-                )}
-              />
-              <span
-                className={cn(
-                  "text-sm",
-                  myPosition > 0
-                    ? "text-positive"
-                    : myPosition < 0
-                      ? "text-negative"
-                      : "text-muted-foreground"
-                )}
-              >
-                {myPosition > 0
-                  ? t("balances.getsBackLabel")
-                  : myPosition < 0
-                    ? t("balances.owesLabel")
-                    : t("balances.settled")}
-              </span>
-            </div>
-
-            <dl className="grid grid-cols-3 gap-4 text-sm lg:grid-cols-3">
-              <div className="space-y-0.5">
-                <dt className="text-[11px] text-muted-foreground uppercase tracking-[0.06em]">
-                  {t("group.youPaid")}
-                </dt>
-                <dd className="num font-medium">
-                  {formatMoney(myBalance?.paid ?? 0, currency)}
-                </dd>
-              </div>
-              <div className="space-y-0.5">
-                <dt className="text-[11px] text-muted-foreground uppercase tracking-[0.06em]">
-                  {t("group.yourShare")}
-                </dt>
-                <dd className="num font-medium">
-                  {formatMoney(myBalance?.owed ?? 0, currency)}
-                </dd>
-              </div>
-              <div className="space-y-0.5">
-                <dt className="text-[11px] text-muted-foreground uppercase tracking-[0.06em]">
-                  {t("group.youSettled")}
-                </dt>
-                <dd className="num font-medium">
-                  {formatMoney(myBalance?.settled ?? 0, currency)}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
-          <SettleUpCard
-            groupId={group.id}
-            currency={currency}
-            members={group.members}
-            highlightUserId={user?.id}
-            transactions={settlement.transactions}
-            history={history}
-            onChanged={() => void load()}
-          />
-          <ExpensesCard
-            currency={currency}
-            expenses={expenses}
-            total={expensesTotal}
-            loadingMore={loadingMore}
-            onLoadMore={() => void loadMoreExpenses()}
-            onDelete={deleteExpense}
-          />
         </div>
-        <div className="space-y-6 lg:col-span-2">
-          <Suspense fallback={<Skeleton className="h-80 rounded-xl" />}>
-            <PaidByDonut balances={balances.balances} currency={currency} />
-          </Suspense>
-          <Suspense fallback={<Skeleton className="h-80 rounded-xl" />}>
+        <div className="flex items-center gap-2">
+          {expensesTotal > 0 && (
+            <>
+              <ExpenseDialog
+                group={group}
+                open={expenseOpen}
+                onOpenChange={setExpenseOpen}
+                onCreated={() => void load()}
+              />
+              <BatchExpenseDialog group={group} onCreated={() => void load()} />
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("group.options")}
+              >
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 /> {t("group.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as TabValue)}
+        className="space-y-6"
+      >
+        <TabsList className="grid w-full grid-cols-3 md:hidden">
+          <TabsTrigger value="overview">{t("group.tabOverview")}</TabsTrigger>
+          <TabsTrigger value="expenses">{t("group.tabExpenses")}</TabsTrigger>
+          <TabsTrigger value="people">{t("group.tabPeople")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="animate-fade space-y-6">
+          {expensesTotal === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-start gap-3 py-12 sm:items-center sm:text-center">
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  {t("group.emptyExpensesTitle")}
+                </h2>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  {t("group.emptyExpensesBody")}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <ExpenseDialog group={group} onCreated={() => void load()} />
+                  <BatchExpenseDialog
+                    group={group}
+                    onCreated={() => void load()}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <CardContent className="grid gap-6 py-6 sm:grid-cols-[auto_1fr] sm:gap-12">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      {t("group.yourPosition")}
+                    </p>
+                    <AnimatedMoney
+                      minorUnits={Math.abs(myPosition)}
+                      currency={currency}
+                      className={cn(
+                        "block font-display text-5xl leading-none font-extrabold tracking-tight",
+                        myPosition > 0
+                          ? "text-positive"
+                          : myPosition < 0
+                            ? "text-negative"
+                            : "text-foreground"
+                      )}
+                    />
+                    <p
+                      className={cn(
+                        "text-sm",
+                        myPosition > 0
+                          ? "text-positive"
+                          : myPosition < 0
+                            ? "text-negative"
+                            : "text-muted-foreground"
+                      )}
+                    >
+                      {myPosition > 0
+                        ? t("balances.getsBackLabel")
+                        : myPosition < 0
+                          ? t("balances.owesLabel")
+                          : t("balances.settled")}
+                    </p>
+                  </div>
+
+                  <dl className="grid grid-cols-3 gap-6 sm:border-l sm:border-border sm:pl-12">
+                    <div className="space-y-1">
+                      <dt className="text-xs text-muted-foreground">
+                        {t("group.youPaid")}
+                      </dt>
+                      <dd className="money text-sm font-medium">
+                        {formatMoney(myBalance?.paid ?? 0, currency)}
+                      </dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-xs text-muted-foreground">
+                        {t("group.yourShare")}
+                      </dt>
+                      <dd className="money text-sm font-medium">
+                        {formatMoney(myBalance?.owed ?? 0, currency)}
+                      </dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-xs text-muted-foreground">
+                        {t("group.youSettled")}
+                      </dt>
+                      <dd className="money text-sm font-medium">
+                        {formatMoney(myBalance?.settled ?? 0, currency)}
+                      </dd>
+                    </div>
+                  </dl>
+                </CardContent>
+              </Card>
+
+              <SettleUpCard
+                groupId={group.id}
+                currency={currency}
+                members={group.members}
+                highlightUserId={user?.id}
+                transactions={settlement.transactions}
+                history={history}
+                onChanged={() => void load()}
+              />
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="expenses" className="animate-fade">
+            <ExpensesCard
+              group={group}
+              currency={currency}
+              expenses={expenses}
+              total={expensesTotal}
+              loadingMore={loadingMore}
+              onLoadMore={() => void loadMoreExpenses()}
+              onDelete={deleteExpense}
+              onUpdated={() => void load()}
+            />
+        </TabsContent>
+
+        <TabsContent value="people" className="animate-fade space-y-6">
+          <Suspense fallback={<Skeleton className="h-80 rounded-2xl" />}>
             <PaidVsShareChart currency={currency} balances={balances.balances} />
           </Suspense>
           <BalancesCard currency={currency} balances={balances.balances} />
           <MembersCard group={group} onChanged={() => void load()} />
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <DeleteGroupDialog
         group={group}

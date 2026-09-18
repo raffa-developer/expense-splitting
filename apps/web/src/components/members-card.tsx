@@ -81,7 +81,7 @@ export function MembersCard({
   };
 
   return (
-    <Card className="animate-rise border-border/70">
+    <Card>
       <CardHeader>
         <CardTitle>{t("people.title")}</CardTitle>
         <CardDescription>
@@ -99,7 +99,7 @@ export function MembersCard({
             >
               <span className="flex min-w-0 items-center gap-2.5 text-sm">
                 <span
-                  className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-medium"
+                  className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-medium"
                   style={avatarStyle(member.name)}
                 >
                   {initialsOf(member.name)}
@@ -148,7 +148,7 @@ export function MembersCard({
               {results.map((user) => (
                 <li
                   key={user.id}
-                  className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-1.5"
+                  className="flex items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2"
                 >
                   <span className="min-w-0 truncate text-xs">
                     <span className="font-medium">{user.name}</span>{" "}

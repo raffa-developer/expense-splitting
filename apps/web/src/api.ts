@@ -29,6 +29,8 @@ export interface ParticipantShare {
   user_id: string;
   name: string;
   share: number;
+  percentage?: number | null;
+  weight?: number | null;
 }
 
 export type SplitType = "equal" | "exact" | "percentage" | "shares";
@@ -229,6 +231,17 @@ export const api = {
 
   createExpense: (groupId: string, payload: CreateExpensePayload) =>
     request<Expense>("POST", `/api/groups/${groupId}/expenses`, payload),
+
+  updateExpense: (
+    groupId: string,
+    expenseId: string,
+    payload: CreateExpensePayload
+  ) =>
+    request<Expense>(
+      "PUT",
+      `/api/groups/${groupId}/expenses/${expenseId}`,
+      payload
+    ),
 
   createExpensesBatch: (
     groupId: string,

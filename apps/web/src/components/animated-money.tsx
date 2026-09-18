@@ -1,27 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { formatMoney } from "@/money";
 
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function AnimatedMoney({
   minorUnits,
   currency,
-  className
+  className,
+  animateOnMount = false
 }: {
   minorUnits: number;
   currency: string;
   className?: string;
+  animateOnMount?: boolean;
 }) {
-  const [display, setDisplay] = useState(minorUnits);
-  const previous = useRef(minorUnits);
+  const [display, setDisplay] = useState(() => {
+    if (!animateOnMount || prefersReducedMotion()) {
+      return minorUnits;
+    }
+    return 0;
+  });
+  const displayRef = useRef(display);
 
   useEffect(() => {
-    const from = previous.current;
+    const from = displayRef.current;
     const to = minorUnits;
-    previous.current = minorUnits;
 
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-    if (reduceMotion || from === to) {
+    if (prefersReducedMotion() || from === to) {
+      displayRef.current = to;
       setDisplay(to);
       return;
     }
@@ -33,9 +41,13 @@ export function AnimatedMoney({
     const step = (now: number) => {
       const progress = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(from + (to - from) * eased));
+      const value = Math.round(from + (to - from) * eased);
+      displayRef.current = value;
+      setDisplay(value);
       if (progress < 1) {
         frame = requestAnimationFrame(step);
+      } else {
+        displayRef.current = to;
       }
     };
 
