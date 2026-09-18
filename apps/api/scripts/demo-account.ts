@@ -17,8 +17,8 @@ import { insertExpense, type ExpenseWrite } from "../src/services/expenses.js";
 const DEMO_PASSWORD = "password123";
 
 const demoPeople: { name: string; email: string }[] = [
-  { name: "Alex", email: "alex@demo.local" },
-  { name: "Bruno", email: "bruno@demo.local" },
+  { name: "Nuno Liu", email: "alex@demo.local" },
+  { name: "Osvaldo", email: "bruno@demo.local" },
   { name: "Carla", email: "carla@demo.local" },
   { name: "David", email: "david@demo.local" },
   { name: "Eve", email: "eve@demo.local" },
@@ -56,42 +56,48 @@ function expenseWrite(
   splitType: SplitType,
   participants: ParticipantInput[]
 ): ExpenseWrite {
+  const shares = computeShares({ splitType, amount, participants });
   return {
     description,
     amount,
     paidBy,
     splitType,
-    shares: computeShares({ splitType, amount, participants })
+    participants: shares.map((share, index) => ({
+      userId: share.userId,
+      share: share.share,
+      percentage: participants[index]?.percentage,
+      weight: participants[index]?.weight
+    }))
   };
 }
 
 const groupSpecs: GroupSpec[] = [
   {
     name: "Weekend Trip",
-    members: ["Alex", "Bruno", "Carla", "David", "Eve"],
+    members: ["Nuno Liu", "Osvaldo", "Carla", "David", "Eve"],
     expenses: (id, everyone) => [
       expenseWrite("Dinner at Time Out Market", 8400, id("$account"), "equal", everyone),
-      expenseWrite("Uber to the venue", 2560, id("Alex"), "equal", everyone),
-      expenseWrite("Drinks at Pink Street", 6000, id("Bruno"), "percentage", [
+      expenseWrite("Uber to the venue", 2560, id("Nuno Liu"), "equal", everyone),
+      expenseWrite("Drinks at Pink Street", 6000, id("Osvaldo"), "percentage", [
         { userId: id("$account"), percentage: 25 },
-        { userId: id("Alex"), percentage: 20 },
-        { userId: id("Bruno"), percentage: 25 },
+        { userId: id("Nuno Liu"), percentage: 20 },
+        { userId: id("Osvaldo"), percentage: 25 },
         { userId: id("Carla"), percentage: 10 },
         { userId: id("David"), percentage: 10 },
         { userId: id("Eve"), percentage: 10 }
       ]),
       expenseWrite("Snacks", 1250, id("Carla"), "shares", [
         { userId: id("$account"), weight: 2 },
-        { userId: id("Alex"), weight: 1 },
-        { userId: id("Bruno"), weight: 1 },
+        { userId: id("Nuno Liu"), weight: 1 },
+        { userId: id("Osvaldo"), weight: 1 },
         { userId: id("Carla"), weight: 1 },
         { userId: id("David"), weight: 1 },
         { userId: id("Eve"), weight: 1 }
       ]),
       expenseWrite("Taxi home", 4800, id("$account"), "exact", [
         { userId: id("$account"), share: 1600 },
-        { userId: id("Alex"), share: 1600 },
-        { userId: id("Bruno"), share: 1600 }
+        { userId: id("Nuno Liu"), share: 1600 },
+        { userId: id("Osvaldo"), share: 1600 }
       ])
     ],
     settlement: (id) => ({
@@ -102,7 +108,7 @@ const groupSpecs: GroupSpec[] = [
   },
   {
     name: "Beach Night",
-    members: ["Kevin", "Tomás", "Felipe", "Luís", "Alex", "Bruno", "Carla"],
+    members: ["Kevin", "Tomás", "Felipe", "Luís", "Nuno Liu", "Osvaldo", "Carla"],
     expenses: (id, everyone) => [
       expenseWrite("Comida + bebidas", 6000, id("Kevin"), "equal", everyone),
       expenseWrite("Uber", 3200, id("Tomás"), "equal", everyone),

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { recomputeGroupBalances } from "../src/services/balances.js";
 import {
   authHeaders,
   closeTestContext,
@@ -763,9 +764,9 @@ describe("POST /api/groups/:id/expenses — percentage split", () => {
     const body = response.json();
     expect(body.split_type).toBe("percentage");
     expect(body.participants).toEqual([
-      { user_id: userAt(users, 0).id, name: "Alex", share: 5000 },
-      { user_id: userAt(users, 1).id, name: "Bruno", share: 3000 },
-      { user_id: userAt(users, 2).id, name: "Carla", share: 2000 }
+      { user_id: userAt(users, 0).id, name: "Alex", share: 5000, percentage: 50 },
+      { user_id: userAt(users, 1).id, name: "Bruno", share: 3000, percentage: 30 },
+      { user_id: userAt(users, 2).id, name: "Carla", share: 2000, percentage: 20 }
     ]);
   });
 
@@ -891,9 +892,9 @@ describe("POST /api/groups/:id/expenses — weighted shares", () => {
     const body = response.json();
     expect(body.split_type).toBe("shares");
     expect(body.participants).toEqual([
-      { user_id: userAt(users, 0).id, name: "Alex", share: 500 },
-      { user_id: userAt(users, 1).id, name: "Bruno", share: 250 },
-      { user_id: userAt(users, 2).id, name: "Carla", share: 250 }
+      { user_id: userAt(users, 0).id, name: "Alex", share: 500, weight: 2 },
+      { user_id: userAt(users, 1).id, name: "Bruno", share: 250, weight: 1 },
+      { user_id: userAt(users, 2).id, name: "Carla", share: 250, weight: 1 }
     ]);
   });
 
@@ -1185,5 +1186,311 @@ describe("POST /api/groups/:id/expenses/batch", () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("PUT /api/groups/:id/expenses/:expenseId", () => {
+  async function expectMaintainedMatchesRecompute(
+    groupId: string,
+    headers: Record<string, string>
+  ): Promise<void> {
+    const maintainedResponse = await app.inject({
+      method: "GET",
+      url: `/api/groups/${groupId}/balances`,
+      headers
+    });
+    expect(maintainedResponse.statusCode).toBe(200);
+    const maintained = maintainedResponse.json() as {
+      total: number;
+      balances: {
+        user_id: string;
+        paid: number;
+        owed: number;
+        settled: number;
+        balance: number;
+      }[];
+    };
+    const recomputed = await recomputeGroupBalances(context.pool, groupId);
+
+    expect(maintained.total).toBe(recomputed.total);
+    expect(maintained.balances).toHaveLength(recomputed.balances.length);
+
+    const maintainedByUser = new Map(
+      maintained.balances.map((row) => [row.user_id, row])
+    );
+    for (const row of recomputed.balances) {
+      const item = maintainedByUser.get(row.user_id);
+      expect({
+        paid: item?.paid,
+        owed: item?.owed,
+        settled: item?.settled,
+        balance: item?.balance
+      }).toEqual({
+        paid: row.paid,
+        owed: row.owed,
+        settled: row.settled,
+        balance: row.balance
+      });
+    }
+  }
+
+  it("updates the expense and keeps balances equal to recompute", async () => {
+    const { group, users, headers } = await setup();
+    const alex = userAt(users, 0);
+    const bruno = userAt(users, 1);
+
+    const created = await createExpense(
+      app,
+      group.id,
+      {
+        description: "Dinner",
+        amount: 10000,
+        paidBy: alex.id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      },
+      alex
+    );
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/groups/${group.id}/expenses/${created.id}`,
+      headers,
+      payload: {
+        description: "Dinner (updated)",
+        amount: 12000,
+        paidBy: bruno.id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toMatchObject({
+      id: created.id,
+      group_id: group.id,
+      description: "Dinner (updated)",
+      amount: 12000,
+      split_type: "equal",
+      paid_by: bruno.id,
+      paid_by_name: "Bruno"
+    });
+    expect(body.participants).toEqual([
+      { user_id: userAt(users, 0).id, name: "Alex", share: 3000 },
+      { user_id: userAt(users, 1).id, name: "Bruno", share: 3000 },
+      { user_id: userAt(users, 2).id, name: "Carla", share: 3000 },
+      { user_id: userAt(users, 3).id, name: "David", share: 3000 }
+    ]);
+
+    await expectMaintainedMatchesRecompute(group.id, headers);
+  });
+
+  it("removes a participant and reverses their owed balance", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno", "Carla"]);
+    const alex = userAt(users, 0);
+    const carla = userAt(users, 2);
+
+    const created = await createExpense(
+      app,
+      group.id,
+      {
+        description: "Taxi",
+        amount: 900,
+        paidBy: alex.id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      },
+      alex
+    );
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/groups/${group.id}/expenses/${created.id}`,
+      headers,
+      payload: {
+        description: "Taxi",
+        amount: 900,
+        paidBy: alex.id,
+        splitType: "equal",
+        participants: [
+          { userId: userAt(users, 0).id },
+          { userId: userAt(users, 1).id }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().participants).toEqual([
+      { user_id: userAt(users, 0).id, name: "Alex", share: 450 },
+      { user_id: userAt(users, 1).id, name: "Bruno", share: 450 }
+    ]);
+
+    const balances = await app.inject({
+      method: "GET",
+      url: `/api/groups/${group.id}/balances`,
+      headers
+    });
+    const carlaRow = balances
+      .json()
+      .balances.find((row: { user_id: string }) => row.user_id === carla.id);
+    expect(carlaRow?.owed).toBe(0);
+
+    await expectMaintainedMatchesRecompute(group.id, headers);
+  });
+
+  it("round-trips percentage inputs without shifting shares", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno", "Carla"]);
+    const payload = {
+      description: "Rent",
+      amount: 10000,
+      paidBy: userAt(users, 0).id,
+      splitType: "percentage" as const,
+      participants: [
+        { userId: userAt(users, 0).id, percentage: 50 },
+        { userId: userAt(users, 1).id, percentage: 25 },
+        { userId: userAt(users, 2).id, percentage: 25 }
+      ]
+    };
+
+    const created = await createExpense(app, group.id, payload, userAt(users, 0));
+    const before = created.participants.map((participant) => participant.share);
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/groups/${group.id}/expenses/${created.id}`,
+      headers,
+      payload
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.participants).toEqual([
+      {
+        user_id: userAt(users, 0).id,
+        name: "Alex",
+        share: before[0],
+        percentage: 50
+      },
+      {
+        user_id: userAt(users, 1).id,
+        name: "Bruno",
+        share: before[1],
+        percentage: 25
+      },
+      {
+        user_id: userAt(users, 2).id,
+        name: "Carla",
+        share: before[2],
+        percentage: 25
+      }
+    ]);
+
+    await expectMaintainedMatchesRecompute(group.id, headers);
+  });
+
+  it("returns 404 for an unknown expense", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno"]);
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/groups/${group.id}/expenses/00000000-0000-4000-8000-000000000000`,
+      headers,
+      payload: {
+        description: "Dinner",
+        amount: 1000,
+        paidBy: userAt(users, 0).id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe("EXPENSE_NOT_FOUND");
+  });
+
+  it("returns 403 for a non-member", async () => {
+    const { group, users } = await setup(["Alex", "Bruno"]);
+    const eve = await registerUser(app, "Eve");
+
+    const created = await createExpense(
+      app,
+      group.id,
+      {
+        description: "Dinner",
+        amount: 1000,
+        paidBy: userAt(users, 0).id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      },
+      userAt(users, 0)
+    );
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/groups/${group.id}/expenses/${created.id}`,
+      headers: authHeaders(eve),
+      payload: {
+        description: "Hacked",
+        amount: 1000,
+        paidBy: eve.id,
+        splitType: "equal",
+        participants: [{ userId: eve.id }]
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe("FORBIDDEN");
+  });
+
+  it("rejects invalid splits without changing the expense", async () => {
+    const { group, users, headers } = await setup(["Alex", "Bruno", "Carla"]);
+    const alex = userAt(users, 0);
+
+    const created = await createExpense(
+      app,
+      group.id,
+      {
+        description: "Dinner",
+        amount: 1000,
+        paidBy: alex.id,
+        splitType: "equal",
+        participants: users.map((user) => ({ userId: user.id }))
+      },
+      alex
+    );
+
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/groups/${group.id}/expenses/${created.id}`,
+      headers,
+      payload: {
+        description: "Dinner",
+        amount: 1000,
+        paidBy: alex.id,
+        splitType: "exact",
+        participants: [
+          { userId: userAt(users, 0).id, share: 100 },
+          { userId: userAt(users, 1).id, share: 100 },
+          { userId: userAt(users, 2).id, share: 100 }
+        ]
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("INVALID_SPLIT");
+
+    const current = await app.inject({
+      method: "GET",
+      url: `/api/groups/${group.id}/expenses/${created.id}`,
+      headers
+    });
+    expect(current.json()).toMatchObject({
+      description: "Dinner",
+      amount: 1000,
+      split_type: "equal"
+    });
+
+    await expectMaintainedMatchesRecompute(group.id, headers);
   });
 });

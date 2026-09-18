@@ -5,12 +5,16 @@ import { AppError } from "../errors.js";
 import { getCurrentUser } from "../plugins/auth.js";
 import { idParamSchema, uuidPattern } from "../schemas.js";
 import {
+  applyExpenseBalances,
   assertPayerAndParticipants,
   fetchGroupUserState,
   findExpenseOr404,
   findExpensesByIds,
   insertExpense,
   listExpensesPage,
+  lockExpenseOr404,
+  reverseExpenseBalances,
+  updateExpense,
   type ExpenseWrite
 } from "../services/expenses.js";
 import { assertGroupMember, findGroupOr404 } from "../services/groups.js";
@@ -121,16 +125,23 @@ function toExpenseWrite(item: ExpenseItemBody): ExpenseWrite {
     );
   }
 
+  const shares = computeShares({
+    splitType: item.splitType,
+    amount: item.amount,
+    participants: item.participants
+  });
+
   return {
     description,
     amount: item.amount,
     paidBy: item.paidBy,
     splitType: item.splitType,
-    shares: computeShares({
-      splitType: item.splitType,
-      amount: item.amount,
-      participants: item.participants
-    })
+    participants: shares.map((share, index) => ({
+      userId: share.userId,
+      share: share.share,
+      percentage: item.participants[index]?.percentage,
+      weight: item.participants[index]?.weight
+    }))
   };
 }
 
@@ -260,52 +271,19 @@ export function registerExpenseRoutes(app: FastifyInstance, pool: Pool): void {
       try {
         await client.query("BEGIN");
 
-        const { rows: shareRows } = await client.query<{
-          user_id: string;
-          share: number;
-        }>(
-          `SELECT user_id, share
-           FROM expense_participants
-           WHERE expense_id = $1`,
-          [request.params.expenseId]
+        const snapshot = await lockExpenseOr404(
+          client,
+          group.id,
+          request.params.expenseId
         );
 
-        const deleted = await client.query<{ paid_by: string; amount: number }>(
+        await client.query(
           `DELETE FROM expenses
-           WHERE id = $1 AND group_id = $2
-           RETURNING paid_by, amount`,
+           WHERE id = $1 AND group_id = $2`,
           [request.params.expenseId, group.id]
         );
 
-        const expense = deleted.rows[0];
-        if (!expense) {
-          throw new AppError(404, "EXPENSE_NOT_FOUND", "Expense not found");
-        }
-
-        const payerUpdate = await client.query(
-          `UPDATE group_balances
-           SET paid = paid - $3
-           WHERE group_id = $1 AND user_id = $2`,
-          [group.id, expense.paid_by, expense.amount]
-        );
-        if (payerUpdate.rowCount !== 1) {
-          throw new Error("Failed to reverse payer balance");
-        }
-
-        const participantUpdate = await client.query(
-          `UPDATE group_balances AS gb
-           SET owed = gb.owed - item.share
-           FROM unnest($2::uuid[], $3::bigint[]) AS item(user_id, share)
-           WHERE gb.group_id = $1 AND gb.user_id = item.user_id`,
-          [
-            group.id,
-            shareRows.map((row) => row.user_id),
-            shareRows.map((row) => row.share)
-          ]
-        );
-        if (participantUpdate.rowCount !== shareRows.length) {
-          throw new Error("Failed to reverse participant balances");
-        }
+        await reverseExpenseBalances(client, group.id, snapshot);
 
         await client.query("COMMIT");
       } catch (error) {
@@ -316,6 +294,53 @@ export function registerExpenseRoutes(app: FastifyInstance, pool: Pool): void {
       }
 
       return reply.status(204).send();
+    }
+  );
+
+  app.put<{ Params: { id: string; expenseId: string }; Body: ExpenseItemBody }>(
+    "/api/groups/:id/expenses/:expenseId",
+    {
+      schema: { params: expenseDetailParamsSchema, body: expenseItemBodySchema }
+    },
+    async (request, reply) => {
+      const group = await findGroupOr404(pool, request.params.id);
+      await assertGroupMember(pool, group.id, getCurrentUser(request).id);
+
+      const participantIds = participantIdsOf(request.body);
+      const state = await fetchGroupUserState(pool, group.id, [
+        ...new Set([request.body.paidBy, ...participantIds])
+      ]);
+      assertPayerAndParticipants(state, request.body.paidBy, participantIds);
+
+      const write = toExpenseWrite(request.body);
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        const snapshot = await lockExpenseOr404(
+          client,
+          group.id,
+          request.params.expenseId
+        );
+        await reverseExpenseBalances(client, group.id, snapshot);
+        await updateExpense(client, group.id, request.params.expenseId, write);
+        await applyExpenseBalances(client, group.id, write);
+
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      const expense = await findExpenseOr404(
+        pool,
+        group.id,
+        request.params.expenseId
+      );
+      return reply.status(200).send(expense);
     }
   );
 }

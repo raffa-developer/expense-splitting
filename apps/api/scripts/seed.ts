@@ -93,8 +93,8 @@ async function addExpense(
 }
 
 async function main(): Promise<void> {
-  const alex = await ensureUser("Alex", "alex@demo.local");
-  const bruno = await ensureUser("Bruno", "bruno@demo.local");
+  const alex = await ensureUser("Nuno Liu", "alex@demo.local");
+  const bruno = await ensureUser("Osvaldo", "bruno@demo.local");
   const carla = await ensureUser("Carla", "carla@demo.local");
   const david = await ensureUser("David", "david@demo.local");
   const everyone = [alex.user.id, bruno.user.id, carla.user.id, david.user.id];
